@@ -1,0 +1,27 @@
+Package: stratocastR
+Title: stratocastR
+Version: 0.0.0.9000
+Authors@R: 
+    person("Sarah", "Bagby", , "sarah.bagby@case.edu", role = c("aut", "cre"))
+Description: This package contains functions for handling and plotting
+    plate-reader data from the Cerillo Stratus instrument's Labrador
+    software.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports: 
+    anytime,
+    dplyr,
+    forecast,
+    ggplot2,
+    patchwork,
+    purrr,
+    readr,
+    readxl,
+    tidyr,
+    tsibble,
+    writexl,
+    xfun
+LitrVersionUsed: 0.9.3
+LitrId: 63722011bc80bfc9c1b12b1853dc29e6

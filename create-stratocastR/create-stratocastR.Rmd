@@ -1,0 +1,766 @@
+---
+# YAML header created by ox-ravel
+title: "Creating the ``r params$package_name`` R package"
+date: 2026-03-01
+knit: litr::render
+output: litr::litr_html_document
+params:
+  package_name: "stratocastR"
+  package_parent_dir: ".." 
+author: Sarah Bagby
+---
+
+
+# Package setup
+
+We start by specifying the information needed in the DESCRIPTION file of the R package.
+
+```{r}
+#| label: package-setup
+#| include: FALSE
+usethis::create_package(
+  path = ".",
+  fields = list(
+    Package = params$package_name,
+    Version = "0.0.0.9000",
+    Title = "stratocastR",
+    Description = "This package contains functions for handling and plotting plate-reader data from the Cerillo Stratus instrument's Labrador software.",
+    `Authors@R` = person(
+      given = "Sarah",
+      family = "Bagby",
+      email = "sarah.bagby@case.edu",
+      role = c("aut", "cre")
+      )
+  )
+)
+usethis::use_mit_license(copyright_holder = "S. C. Bagby")
+usethis::use_package("dplyr")
+usethis::use_package("tidyr")
+usethis::use_package("readxl")
+usethis::use_package("readr")
+usethis::use_package("anytime")
+usethis::use_package("xfun")
+usethis::use_package("writexl")
+usethis::use_package("purrr")
+usethis::use_package("tsibble")
+usethis::use_package("forecast")
+usethis::use_package("ggplot2")
+usethis::use_package("patchwork")
+```
+
+
+# stratocastR functions
+
+
+## Read the data
+
+Data files exported from Cerillo Labrador in .csv format contain several un-commented header rows of metadata, then a blank line, then a row of column names, and finally one row of data for each timepoint measured.  *This package expects that the data file is the raw .csv export with no manual editing.*
+
+Optionally, you can also supply a template file, also in .csv format.  To reduce mistakes in setting up the template, this file should be shaped like a 96-well plate itself, with 8 rows (A-H) and 12 columns (1-12).  Each well's cell should hold the treatment group that well belongs to (e.g., "Control", "Blank", "BG.Cab\_ATC").  To set up a plate layout file for a new plate, use \`make\_layout\_file()\` to write a fresh template to .xlsx or .csv for editing.
+
+```{r}
+#| include: FALSE
+#' Create a fresh plate layout file, as .xlsx or .csv.
+#'
+#' @param filename (character) Destination filename, with .xlsx or .csv extension
+#' @export
+make_layout_file <- function(filename) {
+    filetype <- xfun::file_ext(filename)
+    stopifnot("Plate layout file must be either .csv or .xlsx" =
+                  filetype %in% c("csv", "xlsx"))
+    template <- {expand.grid(platerow = LETTERS[1:8], platecol = paste0("c", 1:12),
+                             val = NA) %>%
+                     tidyr::pivot_wider(names_from = platecol, values_from = val)}
+    if (filetype == "csv") {
+        readr::write_csv(template, filename)
+    } else {
+        writexl::write_xlsx(template, filename)
+    }
+}
+```
+
+Once the layout template has been filled in, the data and layout metadata can be read in and merged.  For use in outlier detection, we also retrieve the length of the interval between measurements from the header section of the data file.
+
+```{r}
+#| include: FALSE
+#' Read in the treatment file
+#'
+#' @param filename (character) Plate layout file (.csv, .xlsx), following the
+#'   `make_layout_file()` format
+#' @return A tidy dataframe with one row for each well and two columns:
+#'   - well:  the well ID, e.g., "A1"
+#'   - treatment:  the experimental condition in the well
+read_treatments <- function(treatments) {
+    filetype <- xfun::file_ext(treatments)
+    stopifnot("Plate layout file must be either .csv or .xlsx" =
+                  filetype %in% c("csv", "xlsx"))
+    if (filetype == "csv") {
+        metadata <- readr::read_csv(treatments, col_types = cols())
+    } else {
+        metadata <- readxl::read_xlsx(treatments)
+    }
+    metadata <- {metadata %>%
+                     tidyr::pivot_longer(-platerow,
+                                         names_to = "platecol",
+                                         names_prefix = "c",
+                                         values_to = "treatment") %>%
+                     dplyr::mutate(well = paste0(platerow, platecol)) %>%
+                     dplyr::select(well, treatment)}
+    return(metadata)
+}
+
+#' Read in the data file and optionally merge in sample info.
+#' 
+#' @param filename (character) Cerillo CSV file
+#' @param treatments (character) Plate layout CSV file, following the `make_layout_file()` format
+#' @return A tidy dataframe with one row for each well's data and metadata at each timepoint
+#' @export
+read_platedata <- function(filename, treatments = NULL) {
+    stopifnot("Data file must be a .csv" = xfun::file_ext(filename) == "csv")
+    data <- {readr::read_csv(filename, col_types = cols(), skip = 12,
+                             name_repair = "unique_quiet") %>%
+                 dplyr::rename("datetime" = `Date and Time`,
+                               "duration.h" = `Duration (Hours)`,
+                               "duration.min" = `Duration (Minutes)`,
+                               "unixtime" = `UNIX Timestamp`,
+                               "airtemp.C" = `Air Temp`) %>%
+                 tidyr::pivot_longer(!(datetime:airtemp.C),
+                                     names_to = "well", values_to = "absorbance") %>%
+                 dplyr::mutate(timestamp = anytime(unixtime)) %>%
+                 dplyr::filter(!grepl("\\.\\.\\.", well)) %>% 
+                 dplyr::select(timestamp, duration.h, duration.min, airtemp.C,
+                               well, absorbance)}
+    if (!is.null(treatments))
+    {
+        metadata <- read_treatments(treatments)
+        data <- dplyr::left_join(data, metadata)
+    }
+    return(data)       
+}
+
+#' Get the measurement interval length and convert to minutes
+#'
+#' @param filename (character) Cerillo CSV file
+#' @return The interval between measurements (in minutes) in the experiment
+#' @export
+get_interval_min <- function(filename) {
+    stopifnot("Data file must be a .csv" = xfun::file_ext(filename) == "csv")
+    header <- readLines("../96well_plate_reader_run_01.30.26.csv", n = 12)
+    interval <- header[which(grepl("Interval", header))]
+    stopifnot("No interval metadata found; check file header" =
+                  length(interval) != 0)
+    interval_min <- as.numeric(sub(".*:,", "", interval)) / 60
+    return(interval_min)
+}
+```
+
+
+## Identify outliers
+
+Experience shows that otherwise clean growth curves can have spikes of outliers (e.g., where the incubator was opened).  We want to both identify these outliers programmatically and allow for some scientific discretion about which ones to remove.  For instance, because the range of absorbance values observed is much smaller in blank wells than in wells where something is growing, the signal-to-noise ratio is low, and automated outlier detection tends to over-identify outliers.  We want to build in functions that identify outliers on a per-well basis but also allow the experimenter to make decisions in the context of the whole plate and the parallel temperature data.  We use the \`tsibble\` and \`forecast\` packages to facilitate time-series handling.
+
+```{r}
+#| include: FALSE
+#' Convert a plate dataset to a tsibble; detect outlier timepoints in each well
+#'
+#' @param data (dataframe) Plate data data.frame, as generated by read_platedata()
+#' @param interval (numeric) Length of time step in minutes, as read by get_interval_min()
+#' @param iter (numeric) Number of outlier-detection iterations for `forecast::tsoutliers()` to run.
+#'   Defaults to 1.
+#' @param incol (character) Column to analyze for outliers.  To examine raw absorbances, e.g., in
+#'   blank wells before aggregation, use "absorbance"; to examine background-subtracted absorbances,
+#'   e.g., in test wells, use "abs.corr"; to examine air temperature, use "airtemp.C".
+#' @return A tsibble that adds two new columns to data:
+#'   - a per-well per-timestep outlier detection result from `forecast::tsoutliers()`; depending on
+#'     the value of `incol`, the column may be `is.outlier.temp` or `is.outlier.abs`
+#'   - `n.out.bgtype`, a per-timestep count of the number of wells in the background type flagged as
+#'     outliers
+#' @export
+detect_outliers <- function(data, interval, iter = 1,
+                            incol = c("absorbance", "abs.corr", "airtemp.C")) {
+    outcol <- ifelse(incol == "airtemp.C", "is.outlier.temp", "is.outlier.abs")
+    data <- tsibble::as_tsibble(data, key = well, index = timestamp)
+    outs <- {data %>%
+                 split(data$well) %>%
+                 purrr::map(\(tsib) data.frame(well = unique(tsib$well),
+                                               outstep =
+                                                   forecast::tsoutliers(tsib[[incol]],
+                                                                        iterate = iter)$index,
+                                               is.outlier = TRUE)) %>%
+                 dplyr::bind_rows() %>%
+                 dplyr::mutate(duration.min = interval * outstep) %>%
+                 dplyr::select(-outstep)}
+    data <- {dplyr::left_join(data, outs) %>%
+                 dplyr::mutate(is.outlier = tidyr::replace_na(is.outlier, FALSE)) %>%
+                 dplyr::rename_with(~outcol, is.outlier)}
+    if (incol != "airtemp.C") {
+        problem.steps <- {data %>%
+                              as.data.frame() %>%
+                              dplyr::group_by(duration.min, bgtype) %>%
+                              dplyr::summarise(n.out.bgtype = sum(is.outlier.abs))}
+        data <- dplyr::left_join(data, problem.steps)
+    }
+    return(data)
+}
+```
+
+
+## Perform background subtraction
+
+The simplest case is that the mean of control-well absorbance measurements at each timepoint should be subtracted from the measured absorbance in each control well.  So at a minimum it should be possible for us to define the treatment(s) that should be fed into that mean for each experimental well.  But there are also other more complicated cases:  different experimental treatments could have different control treatments; individual control wells might have shown contamination that should exclude them from averaging; well-to-well heterogeneity in the plate reader's optics might mean that the best control wells are, e.g., a subset of the control condition wells that are all physically close to the experimental well.  So it should *also* be possible to specify sets of wells that should be used together as the control for a well or group of wells.
+
+For each well, we want to designate whether it contains a blank or a test condition, or whether it should be ignored; we call this value the background type (\`bgtype\`).  We also want to designate which background-subtraction group (\`bggroup\`) each well belongs to, so that the right blanks are subtracted from the right tests.  If there is a single bggroup, we can simply use \`background\_by\_treatment()\` to define the strings that mark blank, test, and ignore wells in the plate layout file.  If the plate is more complicated, we can use \`make\_bg\_file()\` to generate a background template file; then we can edit and save the file externally, and finally read the file back in with \`background\_by\_wells()\`.
+
+```{r}
+#| include: FALSE
+#' Define how treatment conditions should feed into background subtraction, as test wells or as blanks
+#'
+#' @param test (character) The treatment group that should be corrected by background subtraction;
+#'   should match a `treatment` value in the plate layout
+#' @param blanks (character) The treatment group that should be used as the background to subtract;
+#'   should match a `treatment` value in the plate layout
+#' @param ignore (character; defaults to NULL) Any treatment group(s) that should be ignored in analysis
+#' @param treatments (character) Plate layout CSV file, following the `make_layout_file()` format
+#' @return A dataframe with one row per well and three columns:
+#'   - well:  the well ID, e.g., "A1"
+#'   - bgtype:  the categorical column defining each well as "blank", "test", or "ignore".  Blank wells
+#'     are used to determine background; test wells have background subtracted from them; ignore wells
+#'     are ignored.
+#'   - bggroup:  a column defining groups within which background subtraction should be performed.
+#'     Here, 1 for all test or blank wells, otherwise NA.
+#' @seealso background_by_wells() for defining more complex background-subtraction rules with multiple
+#'   groups
+#' @export
+background_by_treatment <- function(test, blanks, ignore = NULL, treatments) {
+    bg <- {read_treatments(treatments) %>%
+               mutate(bgtype = dplyr::case_when(treatment == test ~ "test",
+                                                treatment == blanks ~ "blank",
+                                                treatment %in% ignore ~ "ignore",
+                                                TRUE ~ NA),
+                      bggroup = dplyr::case_when(treatment %in% c(test, blanks) ~ 1,
+                                                 TRUE ~ NA))}
+    if (any(is.na(bg$bgtype))) {warning("Not all treatments were assigned background-type values")}
+    return(bg)
+}
+
+#' Create a blank template file for defining background layout
+#'
+#' @param filename (character) Destination filename, with .xlsx or .csv extension
+#' @return If filename's extension is .xlsx, an Excel file with two sheets
+#'   - `layout`, containing the background layout
+#'   - `params`, defining the strings used in the layout
+#'   If filename's extension is .csv, a .csv file with header lines defining the strings used
+#'   in the layout and a table containing the layout.
+#' @export
+make_bg_file <- function(filename) {
+    filetype <- xfun::file_ext(filename)
+    stopifnot("Plate layout file must be either .csv or .xlsx" =
+                  filetype %in% c("csv", "xlsx"))
+    template <- {expand.grid(platerow = LETTERS[1:8], platecol = paste0("c", 1:12),
+                             val = NA) %>%
+                     tidyr::pivot_wider(names_from = platecol, values_from = val)}
+    header <- c("delim", "blank", "test", "ignore")
+    instructions <- c("# Fill in each well's background group and well type, separated",
+                      "# by the delimiter (e.g., '1;b': group 1, semicolon delimiter, well type b).",
+                      "# Within a group, test wells will be background-corrected using blank wells.")
+    if (filetype == "csv") {
+        readr::write_csv(template, filename)
+        proc <- readLines(filename)
+        header <- paste0(header, ": ")
+        writeLines(c("# Fill in the delimiter character (not a comma!) and the code for each well type.",
+                     header,
+                     instructions,
+                     proc), filename)
+    } else {
+        params <- data.frame(parameter = header, value = rep("", 4),
+                             instructions = c("Fill in the delimiter character",
+                                              "and the code for each well type", "", ""))
+        template <- dplyr::bind_rows(template, data.frame(platerow = instructions))
+        writexl::write_xlsx(list(layout = template, params = params), filename)
+    }
+}
+
+#' Define how wells should feed into background subtraction, as test wells or as blanks
+#'
+#' @param bg (character) Background layout file (.csv or .xlsx), following the
+#'   `make_bg_file()` format. Values in the file should take the form `group;type` (e.g., 1;B,
+#'   1;blank, 1;test); the delimiter between group and type can be specified via `bgdelim`
+#' @return A dataframe with one row per well and three columns:
+#'   - well:  the well ID, e.g., "A1"
+#'   - bgtype:  the categorical column defining each well as "blank", "test", or "ignore".  Blank wells
+#'     are used to determine background; test wells have background subtracted from them; ignore wells
+#'     are ignored.
+#'   - bggroup:  a column defining groups within which background subtraction should be performed.  E.g.,
+#'     if two different media were used in the plate, background subtraction should be performed 
+#'     separately for wells using each medium.
+#' @seealso background_by_treatment() for defining simpler background-subtraction rules with a single
+#'   group
+#' @export
+background_by_wells <- function(bgfile) {
+    bgfiletype <- xfun::file_ext(bgfile)
+    stopifnot("Background layout file must be either .csv or .xlsx" =
+                  bgfiletype %in% c("csv", "xlsx"))
+    if (bgfiletype == "csv") {
+        bg <- readr::read_csv(bgfile, skip = 4, comment = "#", col_types = cols())
+        bgdelim <- grep("delim", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
+        blank <- grep("blank", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
+        test <- grep("test", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
+        ignore <- grep("ignore", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
+    } else {
+        bg <- {readxl::read_xlsx(bgfile, sheet = "layout") %>%
+                   filter(!grepl("^#", platerow))}
+        params <- {readxl::read_xlsx(bgfile, sheet = "params") %>%
+                       select(-instructions)}
+        bgdelim <- params$value[params$parameter == "delim"]
+        blank <- params$value[params$parameter == "blank"]
+        test <- params$value[params$parameter == "test"]
+        ignore <- params$value[params$parameter == "ignore"]
+    }
+    bg <- {bg %>%
+               tidyr::pivot_longer(-platerow,
+                                   names_to = "platecol",
+                                   names_prefix = "c",
+                                   values_to = "bgcode") %>%
+               dplyr::mutate(well = paste0(platerow, platecol)) %>%
+               tidyr::separate_wider_delim(bgcode, names = c("bggroup", "bgtype"),
+                                           delim = bgdelim) %>%
+               dplyr::mutate(bgtype = dplyr::case_when(bgtype == blank ~ "blank",
+                                                       bgtype == test ~ "test",
+                                                       bgtype == ignore ~ "ignore",
+                                                       TRUE ~ NA)) %>%
+               dplyr::select(well, bgtype, bggroup)}
+    if (any(is.na(bg$bgtype))) {warning("Some wells are not marked as blank, test, or ignore")}
+    return(bg)
+}
+```
+
+Once the background structure is defined, we aggregate backgrounds, then subtract from test wells.  By default, background aggregation happens after first filtering out outliers from the blank wells; we can decide how few non-outlier background wells is too few, and make timepoints with fewer ineligible for background subtraction.  We keep track of how each measurement is processed, setting flags for different analytical fates.
+
+```{r}
+#| include: FALSE
+#' Perform background subtraction on a plate reader data file.
+#'
+#' @param data (dataframe) The output of `read_platedata()`; may additionally have been processed through
+#'   `detect_outliers()`
+#' @param bg (dataframe) The output of `background_by_treatment()` or `background_by_well()`
+#' @param iter (numeric) Number of outlier-detection iterations for `forecast::tsoutliers()` to run.
+#'   Defaults to 1.
+#' @param basis (character) Should background values be aggregated by mean or by median before
+#'   subtraction?
+#' @param interval (numeric) Length of time step in minutes, as read by `get_interval_min()`; required
+#'   if `exclude.outliers` is TRUE.
+#' @param exclude.outliers (logical) Should background values flagged as outliers be excluded from
+#'   calculation of background?  Applies only if `data` has been processed through `detect_outliers()`.
+#'   Defaults to TRUE.
+#' @param threshold (numeric) The minimum number of blank wells allowed to be used for background
+#'   subtraction at each timepoint.  Defaults to 3.
+#' @return A dataframe that adds three new columns to data:
+#'   - bgtype:  the categorical column defining each well as "blank", "test", or "ignore".  Blank wells
+#'     are used to determine background; test wells have background subtracted from them; ignore wells
+#'     are ignored.  Merged in from bg.
+#'   - bggroup:  a column defining groups within which background subtraction should be performed.  E.g.,
+#'     if two different media were used in the plate, background subtraction should be performed 
+#'     separately for wells using each medium.  Merged in from bg.
+#'   - bg.n:  a count of blank values aggregated into each group's background value at each time.
+#'   - abs.corr:  a column of background-subtracted values, absorbance - background.  For "blank" and
+#'     "test" wells, these values will be the per-well per-time absorbance minus the group's
+#'     `basis`-aggregated blank absorbance; for "ignore" wells, NA.
+#'   - flag:  notes on the background processing applied to obtain each row's abs.corr value
+#' @export
+subtract_background <- function(data, bg, iter = 1, basis = c("mean", "median"), interval = NULL,
+                                exclude.outliers = TRUE, threshold = 3) {
+    corr.string <- paste0("Abs.corr corrected with ", basis, " of within-group blanks")
+    data <- dplyr::left_join(data, bg)
+    bgfeeder <- dplyr::filter(data, bgtype == "blank")
+    if (exclude.outliers) {
+        if (!"is.outlier.abs" %in% colnames(bgfeeder)) {
+            stopifnot("Outlier analysis requires an interval length to be supplied" =
+                          is.numeric(interval))
+            bgfeeder <- detect_outliers(data = bgfeeder, interval = interval,
+                                        iter = iter, incol = "absorbance")
+            data <- dplyr::left_join(data, bgfeeder) ### <---- issues here
+        }
+        bgfeeder <- dplyr::filter(bgfeeder, !is.outlier.abs)
+    }
+    bgs <- {as.data.frame(bgfeeder) %>%
+                dplyr::group_by(bggroup, duration.min) %>%
+                dplyr::summarise(bg.agg = rlang::exec(basis, absorbance),
+                                 bg.n = dplyr::n())}
+    data <- {dplyr::left_join(data, bgs) %>%
+                 dplyr::mutate(bg.n = tidyr::replace_na(bg.n, 0),
+                               abs.corr = dplyr::case_when(bgtype == "ignore" ~ NA,
+                                                           bg.n < threshold ~ NA,
+                                                           TRUE ~ absorbance - bg.agg),
+                               flag = dplyr::case_when(bgtype != "ignore" & bg.n < threshold ~
+                                                           "Insufficient data for background subtraction",
+                                                       bgtype != "ignore" & bg.n >= threshold ~
+                                                           corr.string,
+                                                       TRUE ~ NA))}
+    return(data)
+}
+```
+
+
+## Plot the data
+
+To facilitate both examination of individual wells and comparison between wells, we use \`patchwork\` to assemble and align differently faceted timeseries plots.  We align the temperature data with the absorbance data over the timeseries and indicate the count of per-timestep outliers across the whole plate over time.
+
+```{r}
+#| include: FALSE
+#' Plot plate-reader data by well, by row, and by column, including temperature and outlier status.
+#'
+#' @param data (dataframe) Plate-reader data processed through `detect_outliers()`
+#' @param exclude.outliers (logical) Should points identified as outliers be hidden? Defaults to
+#'   TRUE.
+#' @param threshold (integer) What fraction of wells with outliers is too many for the data to be 
+#'   shown? For timepoints when the fraction of outliers exceeds plot.threshold, all measurements will 
+#'   be treated as outliers for plotting.  Defaults to 1, i.e., any number of outliers is acceptable.
+#' @param show.ignores (logical) Should data from wells of bgtype "ignore" be plotted?
+#' @param dropstyle (character) If outliers are to be dropped, how should they be dropped?  With
+#'   `dropstyle = "drop"`, outliers are removed from data altogether; lines drawn across the missing
+#'   region will be drawn straight between the last point before the gap and the first point after.
+#'   With `dropstyle = "pointless", outliers are not plotted as points but are included in the line
+#'   graph.  `dropstyle` is checked only if `exclude.outliers` is TRUE.
+#' @param use.corr (logical) For test wells, should background-subtracted (TRUE) or raw (FALSE)
+#'   measurements be plotted?  (Raw measurements are always plotted for blanks and, if plotted, ignores.)
+#' @param title (character) A brief description of the experiment to print as the plot's title.
+#' @param dates (character) The start date or date range of the experiment, to print as the plot's
+#'   subtitle.
+#' @param caption (character) A caption, e.g., for tracking background-subtraction choices or other
+#'   experimental notes.  Defaults to NULL.
+#' @export
+plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores = FALSE, 
+                     dropstyle = c("drop", "pointless", NULL), use.corr = TRUE, title, dates,
+                     caption = NULL) {
+    if (use.corr) {
+        stopifnot("use.corr is TRUE but no background-corrected values provided" =
+                      "abs.corr" %in% colnames(data))
+        data <- dplyr::mutate(data, abs.toplot = dplyr::case_when(bgtype == "test" ~ abs.corr,
+                                                                  TRUE ~ absorbance))
+    } else {
+        data <- dplyr::mutate(data, abs.toplot = absorbance)
+    }
+    if (!show.ignores) {data <- dplyr::filter(data, bgtype != "ignore")}
+
+    # Subset and aggregate data for different panels
+    toplot.T <- {dplyr::filter(data, well == "A1") %>%
+                     dplyr::select(duration.h, duration.min, airtemp.C, n.out)}
+    toplot <- dplyr::mutate(data,
+                            platerow = substr(well, 1, 1),
+                            platecol = gsub("[A-H]", "", well) %>%
+                                factor(levels = 1:12, ordered = TRUE))
+    toplot.n <- dplyr::filter(toplot, platerow == "A")
+    boxleft <- quantile(toplot.T$duration.h, probs = 0.01)
+    boxright <- quantile(toplot.T$duration.h, probs = 0.06)
+    lableft <- quantile(toplot.T$duration.h, probs = 0.08)
+    bggroups <- {as.data.frame(toplot) %>%
+                     dplyr::filter(!grepl("outlier", bggroup)) %>%
+                     dplyr::group_by(platerow, platecol) %>%
+                     dplyr::summarise(grouplab =
+                                          paste0("Group ", first(bggroup))) %>%
+                     dplyr::mutate(xmin = boxleft,
+                                   xmax = boxright,
+                                   lableft = lableft) %>%
+                     dplyr::ungroup()}
+    ngroups <- length(unique(bggroups$grouplab))
+    toplot.points <- toplot
+    if (exclude.outliers) {
+        toplot.points <- dplyr::filter(toplot.points,
+                                       !is.outlier.abs | bgtype == "ignore",
+                                       pct.out <= threshold)
+        if (dropstyle == "drop") {
+            toplot.line <- toplot.points
+        } else {
+            toplot.line <- toplot
+        }
+    }
+
+    # Build plot elements
+    p <- ggplot2::ggplot() +
+        ggplot2::geom_line(data = toplot.line,
+                           ggplot2::aes(duration.h, abs.toplot, group = well),
+                           colour = "gray", linewidth = 0.2) +
+        ggplot2::geom_point(data = toplot.points,
+                            ggplot2::aes(duration.h, abs.toplot, colour = treatment), size = 0.1) +
+        ggplot2::geom_line(data = toplot, ggplot2::aes(duration.h, bg.agg), linewidth = 0.3) +
+        ggplot2::labs(y = "Absorbance", colour = "Condition") +
+        ggplot2::theme_bw(base_size = 8) +
+        ggplot2::theme(text = ggplot2::element_text(family = "Avenir Next Condensed"),
+                       legend.position = "bottom",
+                       axis.title.x = ggplot2::element_blank(),
+                       axis.text.x = ggplot2::element_blank(),
+                       axis.title.y = ggplot2::element_text(angle = 0, vjust = 0.5),
+                       legend.spacing.x = unit(1, "pt"),
+                       legend.spacing.y = unit(1, "pt"),
+                       legend.key.width = unit(8, "pt"),
+                       legend.key.height = unit(8, "pt"),
+                       legend.margin = margin(2, 60, 2, 0),
+                       panel.grid = ggplot2::element_blank()) +
+        ggplot2::guides(colour = ggplot2::guide_legend(nrow = 2,
+                                                       override.aes = list(size = 2)))
+    p.bycol <- p + ggplot2::facet_grid(. ~ platecol, drop = FALSE)
+    p.byrow <- p + ggplot2::facet_grid(platerow ~ ., drop = FALSE) +
+        ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+                       axis.title.y = ggplot2::element_blank())
+    p.bywell <- p + ggplot2::facet_grid(platerow ~ platecol, drop = FALSE)
+    if (ngroups > 1) {
+        p.bywell <- p.bywell +
+            geom_rect(data = bggroups,
+                      ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0.95, ymax = 1.05,
+                          fill = grouplab)) +
+            geom_text(data = bggroups,
+                      ggplot2::aes(x = lableft, y = 1, label = grouplab),
+                      hjust = 0, size = 2, family = "Avenir Next Condensed") +
+            scale_fill_brewer(palette = "Dark2", guide = "none")
+    }
+    p.T <- ggplot2::ggplot(toplot.T, ggplot2::aes(duration.h, airtemp.C)) +
+        ggplot2::geom_line() +
+        ggplot2::labs(x = "Duration (h)", y = "Air\ntemp\n(\u00b0C)") +
+        ggplot2::theme_bw(base_size = 8) +
+        ggplot2::theme(text = ggplot2::element_text(family = "Avenir Next Condensed"),
+                       axis.title.y = ggplot2::element_text(angle = 0, vjust = 0.5),
+                       panel.grid = ggplot2::element_blank())
+    p.nout <- ggplot2::ggplot(toplot.n) +
+        ggplot2::geom_segment(ggplot2::aes(duration.h, y = 0, yend = 1, colour = n.out)) +
+        ggplot2::labs(y = "Outliers\nper time", colour = "Number of \noutlier wells") +
+        ggplot2::theme_bw(base_size = 8) +
+        ggplot2::theme(text = ggplot2::element_text(family = "Avenir Next Condensed"),
+              strip.background = ggplot2::element_blank(),
+              strip.text.x = ggplot2::element_blank(),
+              legend.position = "bottom",
+              axis.title.y = ggplot2::element_text(angle = 0, vjust = 0.5),
+              axis.text.y = ggplot2::element_blank(),
+              axis.ticks.y = ggplot2::element_blank(),
+              axis.title.x = ggplot2::element_blank(),
+              axis.text.x = ggplot2::element_blank(),
+              legend.margin = margin_auto(2, unit = "pt"),
+              panel.grid = ggplot2::element_blank()) +
+        ggplot2::scale_colour_viridis_c(option = "inferno") +
+        ggplot2::facet_grid(. ~ platecol, drop = FALSE)
+    p.Tstrip <- ggplot2::ggplot(filter(toplot.n, is.outlier.temp)) +
+        ggplot2::geom_segment(ggplot2::aes(duration.h, y = 0, yend = 1), colour = "black",
+                              linewidth = 0.1) +
+        ggplot2::geom_segment(data = dplyr::filter(toplot.line,
+                                                   duration.min == min(duration.min) |
+                                                   duration.min == max(duration.min)),
+                              ggplot2::aes(duration.h, y = 0, yend = 1), colour = "black", alpha = 0) +
+        ggplot2::labs(x = "Duration (h)", y = "Air temp\noutliers") +
+        ggplot2::theme_bw(base_size = 8) +
+        ggplot2::theme(text = ggplot2::element_text(family = "Avenir Next Condensed"),
+              strip.background = ggplot2::element_blank(),
+              strip.text.x = ggplot2::element_blank(),
+              legend.position = "bottom",
+              axis.title.y = ggplot2::element_text(angle = 0, vjust = 0.5),
+              axis.text.y = ggplot2::element_blank(),
+              axis.ticks.y = ggplot2::element_blank(),
+              legend.margin = margin_auto(0, unit = "pt"),
+              panel.grid = ggplot2::element_blank()) +
+        ggplot2::facet_grid(. ~ platecol, drop = FALSE)
+    layout <- "
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+AAAAAAAAAAAB
+CCCCCCCCCCCD
+EEEEEEEEEEEG
+FFFFFFFFFFFG
+"
+    p.master <- patchwork::wrap_plots(A = p.bywell, B = p.byrow, C = p.bycol, D = p.T,
+                                      E = p.nout, F = p.Tstrip, G = guide_area(),
+                                      design = layout, guides = "collect") +
+        patchwork::plot_annotation(title = title, subtitle = dates, caption = caption) &
+        ggplot2::theme(text = element_text(family = "Avenir Next Condensed"))
+    return(p.master)
+}
+```
+
+
+## Put it all together
+
+While the package's functions are largely exported and visible, it ought to be possible to run a standard analysis of a plate, saving the resulting plot to a file, with one command.  Given the data and metadata (Cerillo file, plate layout, background setup, experiment name for the plot title) and an output filename, running \`process\_plate()\` will
+
+-   read in plate-reader data and the length of the interval between measurements
+-   read in the plate layout
+-   set background groups, so that, e.g., blank wells with medium A feed into background subtraction for test wells with medium A, blanks with B for B tests, etc.
+-   detect per-timepoint outliers in blanks
+-   aggregate blanks to be used for background subtraction within each group
+-   apply background subtraction
+-   detect outliers in background-subtracted test wells
+-   plot the results and save
+
+Analytical parameters should have reasonable defaults that can be changed in the top-level command, so that it's possible to change them without having to step through the component functions one by one.  In particular, we want to make it possible to tweak the following.
+
+-   Outlier detection:  How many iterations should the \`forecast::tsoutlier()\` outlier-detection algorithm perform?  The function defaults to 2, but that seems to be over-sensitive for this data, so we set \`iter = 1\` by default in \`detect\_outliers()\`.  This can be changed via \`ts.iter\` in \`process\_plate()\`.
+
+-   Background subtraction
+    -   Should outlier readings in blank wells be removed before aggregating background measurements?  \`exclude.outliers\` defaults to TRUE in \`subtract\_background()\`; this can be changed via \`exclude.bg.outliers\` in \`process\_plate()\`.
+    
+    -   Should blank wells' absorbance readings be aggregated by mean or median for background subtraction?  \`process\_plate()\` passes "median" to \`basis\` in \`subtract\_background()\` by default; this can be changed via \`bg.basis\`.
+    
+    -   What's the minimum number of blank wells with data that are required for background subtraction to proceed at a given timepoint?  \`threshold\` defaults to 3 in \`subtract\_background()\`; this can be changed via \`bg.threshold\` in \`process\_plate()\`.
+
+-   Plotting
+    -   Should data from wells of the "ignore" type be plotted?  Even in empty wells, variation in readings can help identify problematic timepoints, so an initial analysis might want to show the raw data from these wells even though it's not otherwise informative; for a polished plot, these wells should generally be omitted.  \`show.ignores\` defaults to FALSE in \`plot\_abs()\`; this can be changed with \`show.ignores\` in \`process\_plate()\`.
+    
+    -   How many wells with outliers is too many for the data to be shown?  Widespread outliers can happen when something external affects the whole plate, e.g., at moments when the temperature changes or in recovery from those changes.  When many wells have outliers at the same timepoint, we may want to treat every measurement from that time as an outlier.  \`threshold\` defaults to 96 (i.e., any number of outliers is acceptable) in \`plot\_abs()\`; this can be changed via \`plot.threshold\` in \`process\_plate()\`.
+    
+    -   How should outliers be treated?  They can be dropped altogether, from points and lines; they can be dropped from the points but kept in the lines, so that they are visible but deemphasized; or they can be included fully.  \`process\_plate()\` passes "pointless" to \`dropstyle\` in \`plot\_abs()\`; this can be changed via \`plot.dropstyle\` in \`process\_plate()\`.
+    
+    -   Should background-subtracted or raw values be shown in test wells?  \`use.corr\` defaults to TRUE in \`plot\_abs()\`; this can be adjusted with \`use.corr\` in \`process\_plate()\`.  When \`use.corr = TRUE\`, background-subtracted values are shown for test wells, while raw values are shown for blank wells (and "ignore" wells, if plotted), with the aggregate background measure overlaid on these wells for a visual reference.  When \`use.corr = FALSE\`, only raw values are shown across the entire plate.
+    
+    -   What should the plot be titled?  Adding an informative title within the plotting panel, not just in the filename, helps track the provenance of figures arising from multiple experiments.  \`process\_plate()\` requires a \`plot.title\` parameter, which is then passed to \`plot\_abs()\`.  Similarly, \`expt.dates\` will feed into the plot's subtitle.  Data-analysis and plotting choices are automatically logged in the plot caption.
+
+```{r}
+#| include: FALSE
+#' Perform end-to-end plate reader data analysis, optionally saving the resulting plot
+#'
+#' @param filename (character) Cerillo CSV file
+#' @param treatments (character) Plate layout CSV file, following the `make_layout_file()` format
+#' @param background.file (character) Background layout .csv or .xlsx file, following the
+#'   `make_bg_file()` format.  Defaults to NULL.  Either `background.file` or `background.treatments`
+#'   must be supplied.
+#' @param background.treatments (list) Named list of conditions to be handled as test wells, blanks,
+#'   and ignores (e.g., `list(test = c("BG.Cab", "Azo"), blank = "Control", ignore = "Empty")).  
+#'   Defaults to NULL.  Either `background.file` or `background.treatments` must be supplied.
+#' @param plot.title (character) A brief description of the experiment, to print as the title of the
+#'   analysis figure.  Other annotations will automatically capture data-analysis parameters; 
+#'   plot title should briefly describe the experiment.
+#' @param expt.dates (character) The start date or date range of the experiment, to print as the plot's
+#'   subtitle.
+#' @param outfile (character) Output filename, if analysis figure is to be saved.  Defaults to NULL.
+#' @param display.plot (logical) Should the analysis figure be displayed on a graphics device?  Can
+#'   be slow.  Defaults to FALSE.
+#' @param ts.iter (numeric) Number of iterations to use in outlier detection.  Defaults to 1.
+#' @param exclude.bg.outliers (logical) Should outlier readings in blank wells be removed before
+#'   aggregating background measurements?  Defaults to TRUE.
+#' @param bg.basis (character) Should blank wells' absorbance readings be aggregated by mean or median
+#'   for background subtraction? Defaults to "median".
+#' @param bg.threshold (numeric) Minimum number of blank wells with data that are required for
+#'   background subtraction to proceed in a background group at a given timepoint?  Defaults to 3.
+#' @param show.ignores (logical) Should data from wells of the "ignore" type be plotted?  Defaults to
+#'   FALSE.
+#' @param plot.threshold (numeric) What fraction of wells with outliers is too many for the data to be 
+#'   shown? For timepoints when the fraction of outliers exceeds plot.threshold, all measurements will 
+#'   be treated as outliers for plotting.  Defaults to 1, i.e., any number of outliers is acceptable.
+#' @param plot.dropstyle (character) How should outliers be plotted?  They can be dropped altogether,
+#'   from points and lines ("drop"); they can be dropped from the points but kept in the lines,
+#'   so that they are visible but deemphasized ("pointless"); or they can be included fully (NULL).
+#' @param use.corr (logical) Should background-subtracted or raw values be shown in test wells?  When
+#'   `use.corr = TRUE`, background-subtracted values are shown for test wells, while raw values are
+#'   shown for blank wells (and "ignore" wells, if plotted), with the aggregate background measure
+#'   overlaid on these wells for a visual reference.  When `use.corr = FALSE`, only raw values are
+#'   shown across the entire plate.
+#' @return A list of length 2, containing
+#'   - a dataframe of processed data
+#'   - a patchwork plot object
+#'   Additionally, if `display.plot` is TRUE, the analysis figure is displayed on a graphics device; 
+#'   if an output filename is supplied, the analysis figure is saved to disk.    
+#' @export
+process_plate <- function(filename, treatments, background.file = NULL, background.treatments = NULL,
+                          plot.title, expt.dates, outfile = NULL, display.plot = FALSE, ts.iter = 1,
+                          exclude.bg.outliers = TRUE, bg.basis = "median", bg.threshold = 3,
+                          show.ignores = FALSE, plot.threshold = 1, plot.dropstyle = "pointless",
+                          use.corr = TRUE) {
+    stopifnot("Either background.file or background.treatments must be supplied" =
+                  is.null(background.file) + is.null(background.treatments) == 1)
+    if (plot.threshold > 1 & plot.threshold <= 96) {
+        warning("Converting plot threshold to fraction of wells on plate, but comparison is to fraction of blank and test wells.  Consider supplying a fraction rather than a total number of wells.")
+        plot.threshold <- plot.threshold / 96
+    }
+    # Read in data
+    plate <- read_platedata(filename, treatments)
+    interval.min <- get_interval_min(filename)
+
+    # Set background groups
+    if (!is.null(background.file)) {
+        bg <- background_by_wells(bg = background.file)
+    } else {
+        bg <- background_by_treatment(test = background.treatments$test,
+                                      blanks = background.treatments$blanks,
+                                      ignore = background.treatments$ignore)
+    }
+    bgcounts <- {bg %>%
+                     dplyr::filter(bgtype != "ignore") %>%
+                     dplyr::group_by(bgtype) %>%
+                     dplyr::summarise(n.meas = dplyr::n())}
+    nonignores <- sum(bgcounts$n.meas)
+
+    # If exclude.bg.outliers is TRUE, detect per-timepoint outliers in blanks.
+    # Aggregate blanks to be used for background subtraction within each group
+    # and apply background subtraction.
+    bgsub <- subtract_background(data = plate, bg = bg, interval = interval.min, 
+                                 iter = ts.iter, exclude.outliers = exclude.bg.outliers,
+                                 basis = bg.basis, threshold = bg.threshold)
+
+    # Detect outliers in background-subtracted test wells.  
+    bgsub.bi <- dplyr::filter(bgsub, bgtype %in% c("blank", "ignore"))
+    bgsub.t <- {dplyr::filter(bgsub, bgtype == "test") %>%
+                    dplyr::select(-is.outlier.abs, -n.out.bgtype) %>%
+                    detect_outliers(data = ., interval = interval.min, iter = ts.iter,
+                                    incol = "abs.corr") %>%
+                    dplyr::mutate(flag = case_when(bgtype == "test" & is.outlier.abs ~
+                                                       "Outlier after background subtraction",
+                                                   bgtype == "test" ~ flag,
+                                                   TRUE ~ flag))}
+    bgsub.all <- dplyr::bind_rows(bgsub.bi, bgsub.t)
+
+    # Tally absorbance outliers and check for outliers in temperature data.
+    problem.steps <- {bgsub.all %>% 
+                          dplyr::group_by(duration.min) %>%
+                          dplyr::summarise(n.out = sum(is.outlier.abs, na.rm = TRUE)) %>%
+                          dplyr::mutate(pct.out = n.out / nonignores)}
+    bgsub.all <- {dplyr::left_join(bgsub.all, problem.steps) %>%
+                      detect_outliers(interval.min, incol = "airtemp.C")}
+    
+    # Set caption to capture data-handling choices
+    if (use.corr) {
+        corrstring <- paste("Measurements in experimental wells corrected by subtracting the",
+                             bg.basis,
+                             "of blanks in each group.",
+                             ifelse(exclude.bg.outliers,
+                                    "Outliers in blanks were removed before aggregation.",
+                                    NULL),
+                             "Black lines show aggregated background.\n")
+    } else {corrstring <- NULL}
+    if (plot.threshold < 1) {
+        thrstring <- paste("and all timepoints when the fraction of outliers exceeds",
+                           plot.threshold)
+    } else {thrstring <- NULL}
+    if (plot.dropstyle == "drop") {
+        outstring <- paste("Outliers", thrstring, "have been masked in points and lines.\n")
+    } else if (plot.dropstyle == "pointless") {
+        outstring <- paste("Outliers", thrstring,
+                           "have been masked in points but are shown in gray lines.\n")
+    } else {outstring <- NULL}
+    if (!show.ignores) {
+        ignorestring <- "Measurements from `ignore` wells are not shown."
+    } else {ignorestring <- NULL}
+    plot.caption <- paste0(corrstring, outstring, ignorestring)
+
+    # Plot the results and save
+    p <- plot_abs(bgsub.all, threshold = plot.threshold, dropstyle = plot.dropstyle,
+                  use.corr = use.corr, show.ignores = show.ignores, title = plot.title,
+                  dates = expt.dates, caption = plot.caption)
+    if (display.plot) {p}
+    if (!is.null(outfile)) {ggsave(outfile, width = 14.5, height = 8)}
+    
+    return(list(data = bgsub.all, plot = p))
+}
+```
+
+
+# Documenting the package and building
+
+We finish by running commands that will document and install the package.
+
+```{r}
+litr::document()
+devtools::install()
+```
+
