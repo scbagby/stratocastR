@@ -85,3 +85,9 @@ per timepoint across the plate.
 \`mydata$data\` is the dataframe of measurements, metadata, outlier calls, and background-subtracted absorbance values, ready for use in calculating growth rates, etc.  \`mydata$plot\`
 is a patchwork ggplot that you can manipulate like any patchwork or
 ggplot object.
+
+# Sample output
+
+Here's an example of what the output might look like, and why we care about getting the context of temperature and outlier data.  This is data from an experiment with our pet strain BG.Cab during which our incubator died at about the 100-hour mark.  Row-major and column-major overlays let us easily assess agreement between replicates, and we can easily see what went wrong and when.
+
+[Sample output](source-files/test.png)
