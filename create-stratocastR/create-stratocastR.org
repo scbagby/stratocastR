@@ -127,7 +127,7 @@ require("patchwork")
 
 Data files exported from Cerillo Labrador in .csv format contain several un-commented header rows of metadata, then a blank line, then a row of column names, and finally one row of data for each timepoint measured.  /This package expects that the data file is the raw .csv export with no manual editing./
 
-Optionally, you can also supply a template file, also in .csv format.  To reduce mistakes in setting up the template, this file should be shaped like a 96-well plate itself, with 8 rows (A-H) and 12 columns (1-12).  Each well's cell should hold the treatment group that well belongs to (e.g., "Control", "Blank", "BG.Cab_ATC").  To set up a plate layout file for a new plate, use `make_layout_file()` to write a fresh template to .xlsx or .csv for editing.
+Optionally, you can also supply a template file, also in .csv format.  To reduce mistakes in setting up the template, this file should be shaped like a 96-well plate itself, with 8 rows (A-H) and 12 columns (1-12).  Each well's cell should hold the treatment group that well belongs to (e.g., "Control", "Blank", "BG.Cab_ATC").  To set up a plate layout file for a new plate, use =make_layout_file()= to write a fresh template to .xlsx or .csv for editing.
 
 #+begin_src R :session strato :results silent :ravel include=FALSE
 #' Create a fresh plate layout file, as .xlsx or .csv.
@@ -225,7 +225,7 @@ get_interval_min <- function(filename) {
 
 ** Identify outliers
 
-Experience shows that otherwise clean growth curves can have spikes of outliers (e.g., where the incubator was opened).  We want to both identify these outliers programmatically and allow for some scientific discretion about which ones to remove.  For instance, because the range of absorbance values observed is much smaller in blank wells than in wells where something is growing, the signal-to-noise ratio is low, and automated outlier detection tends to over-identify outliers.  We want to build in functions that identify outliers on a per-well basis but also allow the experimenter to make decisions in the context of the whole plate and the parallel temperature data.  We use the `tsibble` and `forecast` packages to facilitate time-series handling.
+Experience shows that otherwise clean growth curves can have spikes of outliers (e.g., where the incubator was opened).  We want to both identify these outliers programmatically and allow for some scientific discretion about which ones to remove.  For instance, because the range of absorbance values observed is much smaller in blank wells than in wells where something is growing, the signal-to-noise ratio is low, and automated outlier detection tends to over-identify outliers.  We want to build in functions that identify outliers on a per-well basis but also allow the experimenter to make decisions in the context of the whole plate and the parallel temperature data.  We use the =tsibble= and =forecast= packages to facilitate time-series handling.
 
 #+begin_src R :session strato :results silent :ravel include=FALSE
 #' Convert a plate dataset to a tsibble; detect outlier timepoints in each well
@@ -275,7 +275,7 @@ detect_outliers <- function(data, interval, iter = 1,
 
 The simplest case is that the mean of control-well absorbance measurements at each timepoint should be subtracted from the measured absorbance in each control well.  So at a minimum it should be possible for us to define the treatment(s) that should be fed into that mean for each experimental well.  But there are also other more complicated cases:  different experimental treatments could have different control treatments; individual control wells might have shown contamination that should exclude them from averaging; well-to-well heterogeneity in the plate reader's optics might mean that the best control wells are, e.g., a subset of the control condition wells that are all physically close to the experimental well.  So it should /also/ be possible to specify sets of wells that should be used together as the control for a well or group of wells.
 
-For each well, we want to designate whether it contains a blank or a test condition, or whether it should be ignored; we call this value the background type (`bgtype`).  We also want to designate which background-subtraction group (`bggroup`) each well belongs to, so that the right blanks are subtracted from the right tests.  If there is a single bggroup, we can simply use `background_by_treatment()` to define the strings that mark blank, test, and ignore wells in the plate layout file.  If the plate is more complicated, we can use `make_bg_file()` to generate a background template file; then we can edit and save the file externally, and finally read the file back in with `background_by_wells()`.
+For each well, we want to designate whether it contains a blank or a test condition, or whether it should be ignored; we call this value the background type (bgtype=).  We also want to designate which background-subtraction group (=bggroup=) each well belongs to, so that the right blanks are subtracted from the right tests.  If there is a single bggroup, we can simply use =background_by_treatment()= to define the strings that mark blank, test, and ignore wells in the plate layout file.  If the plate is more complicated, we can use =make_bg_file()= to generate a background template file; then we can edit and save the file externally, and finally read the file back in with =background_by_wells()=.
 
 #+begin_src R :session strato :results silent :ravel include=FALSE
 #' Define how treatment conditions should feed into background subtraction, as test wells or as blanks
@@ -466,7 +466,7 @@ subtract_background <- function(data, bg, iter = 1, basis = c("mean", "median"),
 
 ** Plot the data
 
-To facilitate both examination of individual wells and comparison between wells, we use `patchwork` to assemble and align differently faceted timeseries plots.  We align the temperature data with the absorbance data over the timeseries and indicate the count of per-timestep outliers across the whole plate over time.
+To facilitate both examination of individual wells and comparison between wells, we use =patchwork= to assemble and align differently faceted timeseries plots.  We align the temperature data with the absorbance data over the timeseries and indicate the count of per-timestep outliers across the whole plate over time.
 
 #+begin_src R :session strato :results silent :ravel include=FALSE
 #' Plot plate-reader data by well, by row, and by column, including temperature and outlier status.
@@ -644,7 +644,7 @@ FFFFFFFFFFFG
 
 ** Put it all together
 
-While the package's functions are largely exported and visible, it ought to be possible to run a standard analysis of a plate, saving the resulting plot to a file, with one command.  Given the data and metadata (Cerillo file, plate layout, background setup, experiment name for the plot title) and an output filename, running `process_plate()` will
+While the package's functions are largely exported and visible, it ought to be possible to run a standard analysis of a plate, saving the resulting plot to a file, with one command.  Given the data and metadata (Cerillo file, plate layout, background setup, experiment name for the plot title) and an output filename, running =process_plate()= will
 
 - read in plate-reader data and the length of the interval between measurements
 - read in the plate layout
@@ -657,27 +657,27 @@ While the package's functions are largely exported and visible, it ought to be p
 
 Analytical parameters should have reasonable defaults that can be changed in the top-level command, so that it's possible to change them without having to step through the component functions one by one.  In particular, we want to make it possible to tweak the following.
 
-- Outlier detection:  How many iterations should the `forecast::tsoutlier()` outlier-detection algorithm perform?  The function defaults to 2, but that seems to be over-sensitive for this data, so we set `iter = 1` by default in `detect_outliers()`.  This can be changed via `ts.iter` in `process_plate()`.
+- Outlier detection:  How many iterations should the =forecast::tsoutlier()= outlier-detection algorithm perform?  The function defaults to 2, but that seems to be over-sensitive for this data, so we set =iter = 1= by default in =detect_outliers()=.  This can be changed via =ts.iter= in =process_plate()=.
 
 - Background subtraction
 
-  - Should outlier readings in blank wells be removed before aggregating background measurements?  `exclude.outliers` defaults to TRUE in `subtract_background()`; this can be changed via `exclude.bg.outliers` in `process_plate()`.
+  - Should outlier readings in blank wells be removed before aggregating background measurements?  =exclude.outliers= defaults to TRUE in =subtract_background()=; this can be changed via =exclude.bg.outliers= in =process_plate()=.
 
-  - Should blank wells' absorbance readings be aggregated by mean or median for background subtraction?  `process_plate()` passes "median" to `basis` in `subtract_background()` by default; this can be changed via `bg.basis`.
+  - Should blank wells' absorbance readings be aggregated by mean or median for background subtraction?  =process_plate()= passes "median" to =basis= in =subtract_background()= by default; this can be changed via =bg.basis=.
 
-  - What's the minimum number of blank wells with data that are required for background subtraction to proceed at a given timepoint?  `threshold` defaults to 3 in `subtract_background()`; this can be changed via `bg.threshold` in `process_plate()`.
+  - What's the minimum number of blank wells with data that are required for background subtraction to proceed at a given timepoint?  =threshold= defaults to 3 in =subtract_background()=; this can be changed via =bg.threshold= in =process_plate()=.
 
 - Plotting
 
-  - Should data from wells of the "ignore" type be plotted?  Even in empty wells, variation in readings can help identify problematic timepoints, so an initial analysis might want to show the raw data from these wells even though it's not otherwise informative; for a polished plot, these wells should generally be omitted.  `show.ignores` defaults to FALSE in `plot_abs()`; this can be changed with `show.ignores` in `process_plate()`.
+  - Should data from wells of the "ignore" type be plotted?  Even in empty wells, variation in readings can help identify problematic timepoints, so an initial analysis might want to show the raw data from these wells even though it's not otherwise informative; for a polished plot, these wells should generally be omitted.  =show.ignores= defaults to FALSE in =plot_abs()=; this can be changed with =show.ignores= in =process_plate()=.
 
-  - How many wells with outliers is too many for the data to be shown?  Widespread outliers can happen when something external affects the whole plate, e.g., at moments when the temperature changes or in recovery from those changes.  When many wells have outliers at the same timepoint, we may want to treat every measurement from that time as an outlier.  `threshold` defaults to 96 (i.e., any number of outliers is acceptable) in `plot_abs()`; this can be changed via `plot.threshold` in `process_plate()`.
+  - How many wells with outliers is too many for the data to be shown?  Widespread outliers can happen when something external affects the whole plate, e.g., at moments when the temperature changes or in recovery from those changes.  When many wells have outliers at the same timepoint, we may want to treat every measurement from that time as an outlier.  =threshold= defaults to 96 (i.e., any number of outliers is acceptable) in =plot_abs()=; this can be changed via =plot.threshold= in =process_plate()=.
 
-  - How should outliers be treated?  They can be dropped altogether, from points and lines; they can be dropped from the points but kept in the lines, so that they are visible but deemphasized; or they can be included fully.  `process_plate()` passes "pointless" to `dropstyle` in `plot_abs()`; this can be changed via `plot.dropstyle` in `process_plate()`.
+  - How should outliers be treated?  They can be dropped altogether, from points and lines; they can be dropped from the points but kept in the lines, so that they are visible but deemphasized; or they can be included fully.  =process_plate()= passes "pointless" to =dropstyle= in =plot_abs()=; this can be changed via =plot.dropstyle= in =process_plate()=.
 
-  - Should background-subtracted or raw values be shown in test wells?  `use.corr` defaults to TRUE in `plot_abs()`; this can be adjusted with `use.corr` in `process_plate()`.  When `use.corr = TRUE`, background-subtracted values are shown for test wells, while raw values are shown for blank wells (and "ignore" wells, if plotted), with the aggregate background measure overlaid on these wells for a visual reference.  When `use.corr = FALSE`, only raw values are shown across the entire plate.
+  - Should background-subtracted or raw values be shown in test wells?  =use.corr= defaults to TRUE in =plot_abs()=; this can be adjusted with =use.corr= in =process_plate()=.  When =use.corr = TRUE=, background-subtracted values are shown for test wells, while raw values are shown for blank wells (and "ignore" wells, if plotted), with the aggregate background measure overlaid on these wells for a visual reference.  When =use.corr = FALSE=, only raw values are shown across the entire plate.
 
-  - What should the plot be titled?  Adding an informative title within the plotting panel, not just in the filename, helps track the provenance of figures arising from multiple experiments.  `process_plate()` requires a `plot.title` parameter, which is then passed to `plot_abs()`.  Similarly, `expt.dates` will feed into the plot's subtitle.  Data-analysis and plotting choices are automatically logged in the plot caption.
+  - What should the plot be titled?  Adding an informative title within the plotting panel, not just in the filename, helps track the provenance of figures arising from multiple experiments.  =process_plate()= requires a =plot.title= parameter, which is then passed to =plot_abs()=.  Similarly, =expt.dates= will feed into the plot's subtitle.  Data-analysis and plotting choices are automatically logged in the plot caption.
 
 
 #+begin_src R :session strato :results silent :ravel include=FALSE
@@ -821,14 +821,14 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
 
 ** Add a README
 
-Our README.Rmd lives in the `source-files` directory.  We add `README.Rmd` to the package and then generate the `README.md` based on it:
+Our README.Rmd lives in the =source-files= directory.  We add =README.Rmd= to the package and then, in the top-level project directory, generate the =README.md= based on it:
 
 #+begin_src R
 litr::add_readme("../source-files/README.Rmd")
 #+end_src
 
 ** Document and install
-We finish by running commands that will document and install the package.
+Back in the =create-stratocastR= directory, we finish by running commands that will document and install the package.
 
 #+begin_src R
 litr::document()

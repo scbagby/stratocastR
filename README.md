@@ -5,13 +5,13 @@ Sarah Bagby
 Stratus data files exported from Cerillo Labrador in .csv format contain
 several un-commented header rows of metadata, then a blank line, then a
 row of column names, and finally one row of data for each timepoint
-measured. \`stratocastR\` aims to streamline analysis and visualization
-of this data. *This package expects that the data file is the raw .csv
+measured. `stratocastR` aims to streamline analysis and visualization of
+this data. *This package expects that the data file is the raw .csv
 export with no manual editing.*
 
 Given the data and metadata (Cerillo file, plate layout, background
 setup, experiment name and dates for the plot title and subtitle) and an
-output filename, running \`stratocastR::process_plate()\` will
+output filename, running `stratocastR::process_plate()` will
 
 - read in plate-reader data and the length of the interval between
   measurements
@@ -28,14 +28,13 @@ output filename, running \`stratocastR::process_plate()\` will
 
 # Installation
 
-With \`devtools\` installed, you can install stratocastR from github
-using
+With `devtools` installed, you can install stratocastR from github using
 
     remotes::install_github("scbagby/stratocastR-project", subdir = "stratocastR")
 
 # Getting started
 
-To use \`stratocastR\`, you need an output .csv file from the Stratus;
+To use `stratocastR`, you need an output .csv file from the Stratus;
 let’s say for this example that it’s called “my_data.csv”. You also need
 to know the layout of your 96-well plate, and you need to get that
 information into standardized format. Start by generating a template
@@ -67,9 +66,9 @@ preparing a second type of layout file.
 
 Edit and save the resulting file, following the instructions given in
 the file. If you’ve generated an Excel file, you’ll need to edit both
-the \`layout\` sheet and the \`params\` sheet. If you’ve generated a
-.csv file, you’ll need to edit both the header section and the csv
-section. Either way, once you’ve saved, you’re ready to go.
+the `layout` sheet and the `params` sheet. If you’ve generated a .csv
+file, you’ll need to edit both the header section and the csv section.
+Either way, once you’ve saved, you’re ready to go.
 
     mydata <- process_plate(filename = "my_data.csv",
                             treatments = "my_layout.xlsx",
@@ -81,13 +80,19 @@ section. Either way, once you’ve saved, you’re ready to go.
 
 This should produce an output file showing background-subtracted growth
 profiles in the context of temperature data and the count of outliers
-per timepoint across the plate.
-\`mydata$data\` is the dataframe of measurements, metadata, outlier calls, and background-subtracted absorbance values, ready for use in calculating growth rates, etc.  \`mydata$plot\`
-is a patchwork ggplot that you can manipulate like any patchwork or
-ggplot object.
+per timepoint across the plate. `mydata$data` is the dataframe of
+measurements, metadata, outlier calls, and background-subtracted
+absorbance values, ready for use in calculating growth rates, etc.
+`mydata$plot` is a patchwork ggplot that you can manipulate like any
+patchwork or ggplot object.
 
 # Sample output
 
-Here's an example of what the output might look like, and why we care about getting the context of temperature and outlier data.  This is data from an experiment with our pet strain BG.Cab during which our incubator died at about the 100-hour mark.  Row-major and column-major overlays let us easily assess agreement between replicates, and we can easily see what went wrong and when.
+Here’s an example of what the output might look like, and why we care
+about getting the context of temperature and outlier data. This is data
+from an experiment with our pet strain BG.Cab during which our incubator
+died at about the 100-hour mark. Row-major and column-major overlays let
+us easily assess agreement between replicates, and we can easily see
+what went wrong and when.
 
 [Sample output](source-files/test.png)

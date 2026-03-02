@@ -7,9 +7,9 @@ author: Sarah Bagby
 
 # stratocastR:  tidy processing and plotting of data from the Cerillo Stratus plate-reader
 
-Stratus data files exported from Cerillo Labrador in .csv format contain several un-commented header rows of metadata, then a blank line, then a row of column names, and finally one row of data for each timepoint measured.  \`stratocastR\` aims to streamline analysis and visualization of this data.  *This package expects that the data file is the raw .csv export with no manual editing.*
+Stratus data files exported from Cerillo Labrador in .csv format contain several un-commented header rows of metadata, then a blank line, then a row of column names, and finally one row of data for each timepoint measured.  `stratocastR` aims to streamline analysis and visualization of this data.  *This package expects that the data file is the raw .csv export with no manual editing.*
 
-Given the data and metadata (Cerillo file, plate layout, background setup, experiment name and dates for the plot title and subtitle) and an output filename, running \`stratocastR::process\_plate()\` will
+Given the data and metadata (Cerillo file, plate layout, background setup, experiment name and dates for the plot title and subtitle) and an output filename, running `stratocastR::process_plate()` will
 
 -   read in plate-reader data and the length of the interval between measurements
 -   read in the plate layout
@@ -23,14 +23,14 @@ Given the data and metadata (Cerillo file, plate layout, background setup, exper
 
 # Installation
 
-With \`devtools\` installed, you can install stratocastR from github using
+With `devtools` installed, you can install stratocastR from github using
 
     remotes::install_github("scbagby/stratocastR-project", subdir = "stratocastR")
 
 
 # Getting started
 
-To use \`stratocastR\`, you need an output .csv file from the Stratus; let's say for this example that it's called "my\_data.csv".  You also need to know the layout of your 96-well plate, and you need to get that information into standardized format.  Start by generating a template file for defining the plate layout.
+To use `stratocastR`, you need an output .csv file from the Stratus; let's say for this example that it's called "my\_data.csv".  You also need to know the layout of your 96-well plate, and you need to get that information into standardized format.  Start by generating a template file for defining the plate layout.
 
     library(stratocastR)
     make_layout_file("my_layout.xlsx") # alternatively:  make_layout_file("my_layout.csv")
@@ -46,7 +46,7 @@ If your plate is more complicated (let's say you have different media in differe
 
     make_bg_file("my_background_layout.xlsx")  # alternatively:  make_bg_file("my_background_layout.csv")
 
-Edit and save the resulting file, following the instructions given in the file.  If you've generated an Excel file, you'll need to edit both the \`layout\` sheet and the \`params\` sheet.  If you've generated a .csv file, you'll need to edit both the header section and the csv section.  Either way, once you've saved, you're ready to go.
+Edit and save the resulting file, following the instructions given in the file.  If you've generated an Excel file, you'll need to edit both the `layout` sheet and the `params` sheet.  If you've generated a .csv file, you'll need to edit both the header section and the csv section.  Either way, once you've saved, you're ready to go.
 
     mydata <- process_plate(filename = "my_data.csv",
                             treatments = "my_layout.xlsx",
@@ -56,7 +56,7 @@ Edit and save the resulting file, following the instructions given in the file. 
                             expt.dates = "Run 2026-02-01 to 2026-02-05", # <-- to become the plot subtitle
                             outfile = "my_growth_plot.png")
 
-This should produce an output file showing background-subtracted growth profiles in the context of temperature data and the count of outliers per timepoint across the plate.  \`mydata$data\` is the dataframe of measurements, metadata, outlier calls, and background-subtracted absorbance values, ready for use in calculating growth rates, etc.  \`mydata$plot\` is a patchwork ggplot that you can manipulate like any patchwork or ggplot object.
+This should produce an output file showing background-subtracted growth profiles in the context of temperature data and the count of outliers per timepoint across the plate.  `mydata$data` is the dataframe of measurements, metadata, outlier calls, and background-subtracted absorbance values, ready for use in calculating growth rates, etc.  `mydata$plot` is a patchwork ggplot that you can manipulate like any patchwork or ggplot object.
 
 
 # Sample output

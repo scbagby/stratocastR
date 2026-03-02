@@ -341,8 +341,8 @@ To reduce mistakes in setting up the template, this file should be
 shaped like a 96-well plate itself, with 8 rows (A-H) and 12 columns
 (1-12). Each well’s cell should hold the treatment group that well
 belongs to (e.g., “Control”, “Blank”, “BG.Cab_ATC”). To set up a plate
-layout file for a new plate, use `make_layout_file()` to write a fresh
-template to .xlsx or .csv for editing.</p>
+layout file for a new plate, use <code>make_layout_file()</code> to
+write a fresh template to .xlsx or .csv for editing.</p>
 <p>Once the layout template has been filled in, the data and layout
 metadata can be read in and merged. For use in outlier detection, we
 also retrieve the length of the interval between measurements from the
@@ -359,8 +359,9 @@ wells where something is growing, the signal-to-noise ratio is low, and
 automated outlier detection tends to over-identify outliers. We want to
 build in functions that identify outliers on a per-well basis but also
 allow the experimenter to make decisions in the context of the whole
-plate and the parallel temperature data. We use the `tsibble` and
-`forecast` packages to facilitate time-series handling.</p>
+plate and the parallel temperature data. We use the <code>tsibble</code>
+and <code>forecast</code> packages to facilitate time-series
+handling.</p>
 </div>
 <div id="perform-background-subtraction" class="section level2">
 <h2>Perform background subtraction</h2>
@@ -379,15 +380,16 @@ sets of wells that should be used together as the control for a well or
 group of wells.</p>
 <p>For each well, we want to designate whether it contains a blank or a
 test condition, or whether it should be ignored; we call this value the
-background type (`bgtype`). We also want to designate which
-background-subtraction group (`bggroup`) each well belongs to, so that
-the right blanks are subtracted from the right tests. If there is a
-single bggroup, we can simply use `background_by_treatment()` to define
-the strings that mark blank, test, and ignore wells in the plate layout
-file. If the plate is more complicated, we can use `make_bg_file()` to
-generate a background template file; then we can edit and save the file
-externally, and finally read the file back in with
-`background_by_wells()`.</p>
+background type (bgtype=). We also want to designate which
+background-subtraction group (<code>bggroup</code>) each well belongs
+to, so that the right blanks are subtracted from the right tests. If
+there is a single bggroup, we can simply use
+<code>background_by_treatment()</code> to define the strings that mark
+blank, test, and ignore wells in the plate layout file. If the plate is
+more complicated, we can use <code>make_bg_file()</code> to generate a
+background template file; then we can edit and save the file externally,
+and finally read the file back in with
+<code>background_by_wells()</code>.</p>
 <p>Once the background structure is defined, we aggregate backgrounds,
 then subtract from test wells. By default, background aggregation
 happens after first filtering out outliers from the blank wells; we can
@@ -399,9 +401,9 @@ analytical fates.</p>
 <div id="plot-the-data" class="section level2">
 <h2>Plot the data</h2>
 <p>To facilitate both examination of individual wells and comparison
-between wells, we use `patchwork` to assemble and align differently
-faceted timeseries plots. We align the temperature data with the
-absorbance data over the timeseries and indicate the count of
+between wells, we use <code>patchwork</code> to assemble and align
+differently faceted timeseries plots. We align the temperature data with
+the absorbance data over the timeseries and indicate the count of
 per-timestep outliers across the whole plate over time.</p>
 </div>
 <div id="put-it-all-together" class="section level2">
@@ -410,7 +412,8 @@ per-timestep outliers across the whole plate over time.</p>
 ought to be possible to run a standard analysis of a plate, saving the
 resulting plot to a file, with one command. Given the data and metadata
 (Cerillo file, plate layout, background setup, experiment name for the
-plot title) and an output filename, running `process_plate()` will</p>
+plot title) and an output filename, running <code>process_plate()</code>
+will</p>
 <ul>
 <li>read in plate-reader data and the length of the interval between
 measurements</li>
@@ -431,25 +434,28 @@ without having to step through the component functions one by one. In
 particular, we want to make it possible to tweak the following.</p>
 <ul>
 <li><p>Outlier detection: How many iterations should the
-`forecast::tsoutlier()` outlier-detection algorithm perform? The
-function defaults to 2, but that seems to be over-sensitive for this
-data, so we set `iter = 1` by default in `detect_outliers()`. This can
-be changed via `ts.iter` in `process_plate()`.</p></li>
+<code>forecast::tsoutlier()</code> outlier-detection algorithm perform?
+The function defaults to 2, but that seems to be over-sensitive for this
+data, so we set <code>iter = 1</code> by default in
+<code>detect_outliers()</code>. This can be changed via
+<code>ts.iter</code> in <code>process_plate()</code>.</p></li>
 <li>
 <p>Background subtraction</p>
 <ul>
 <li><p>Should outlier readings in blank wells be removed before
-aggregating background measurements? `exclude.outliers` defaults to TRUE
-in `subtract_background()`; this can be changed via
-`exclude.bg.outliers` in `process_plate()`.</p></li>
+aggregating background measurements? <code>exclude.outliers</code>
+defaults to TRUE in <code>subtract_background()</code>; this can be
+changed via <code>exclude.bg.outliers</code> in
+<code>process_plate()</code>.</p></li>
 <li><p>Should blank wells’ absorbance readings be aggregated by mean or
-median for background subtraction? `process_plate()` passes “median” to
-`basis` in `subtract_background()` by default; this can be changed via
-`bg.basis`.</p></li>
+median for background subtraction? <code>process_plate()</code> passes
+“median” to <code>basis</code> in <code>subtract_background()</code> by
+default; this can be changed via <code>bg.basis</code>.</p></li>
 <li><p>What’s the minimum number of blank wells with data that are
 required for background subtraction to proceed at a given timepoint?
-`threshold` defaults to 3 in `subtract_background()`; this can be
-changed via `bg.threshold` in `process_plate()`.</p></li>
+<code>threshold</code> defaults to 3 in
+<code>subtract_background()</code>; this can be changed via
+<code>bg.threshold</code> in <code>process_plate()</code>.</p></li>
 </ul>
 </li>
 <li>
@@ -459,47 +465,64 @@ changed via `bg.threshold` in `process_plate()`.</p></li>
 empty wells, variation in readings can help identify problematic
 timepoints, so an initial analysis might want to show the raw data from
 these wells even though it’s not otherwise informative; for a polished
-plot, these wells should generally be omitted. `show.ignores` defaults
-to FALSE in `plot_abs()`; this can be changed with `show.ignores` in
-`process_plate()`.</p></li>
+plot, these wells should generally be omitted. <code>show.ignores</code>
+defaults to FALSE in <code>plot_abs()</code>; this can be changed with
+<code>show.ignores</code> in <code>process_plate()</code>.</p></li>
 <li><p>How many wells with outliers is too many for the data to be
 shown? Widespread outliers can happen when something external affects
 the whole plate, e.g., at moments when the temperature changes or in
 recovery from those changes. When many wells have outliers at the same
 timepoint, we may want to treat every measurement from that time as an
-outlier. `threshold` defaults to 96 (i.e., any number of outliers is
-acceptable) in `plot_abs()`; this can be changed via `plot.threshold` in
-`process_plate()`.</p></li>
+outlier. <code>threshold</code> defaults to 96 (i.e., any number of
+outliers is acceptable) in <code>plot_abs()</code>; this can be changed
+via <code>plot.threshold</code> in
+<code>process_plate()</code>.</p></li>
 <li><p>How should outliers be treated? They can be dropped altogether,
 from points and lines; they can be dropped from the points but kept in
 the lines, so that they are visible but deemphasized; or they can be
-included fully. `process_plate()` passes “pointless” to `dropstyle` in
-`plot_abs()`; this can be changed via `plot.dropstyle` in
-`process_plate()`.</p></li>
+included fully. <code>process_plate()</code> passes “pointless” to
+<code>dropstyle</code> in <code>plot_abs()</code>; this can be changed
+via <code>plot.dropstyle</code> in
+<code>process_plate()</code>.</p></li>
 <li><p>Should background-subtracted or raw values be shown in test
-wells? `use.corr` defaults to TRUE in `plot_abs()`; this can be adjusted
-with `use.corr` in `process_plate()`. When `use.corr = TRUE`,
+wells? <code>use.corr</code> defaults to TRUE in
+<code>plot_abs()</code>; this can be adjusted with <code>use.corr</code>
+in <code>process_plate()</code>. When <code>use.corr = TRUE</code>,
 background-subtracted values are shown for test wells, while raw values
 are shown for blank wells (and “ignore” wells, if plotted), with the
 aggregate background measure overlaid on these wells for a visual
-reference. When `use.corr = FALSE`, only raw values are shown across the
-entire plate.</p></li>
+reference. When <code>use.corr = FALSE</code>, only raw values are shown
+across the entire plate.</p></li>
 <li><p>What should the plot be titled? Adding an informative title
 within the plotting panel, not just in the filename, helps track the
 provenance of figures arising from multiple experiments.
-`process_plate()` requires a `plot.title` parameter, which is then
-passed to `plot_abs()`. Similarly, `expt.dates` will feed into the
-plot’s subtitle. Data-analysis and plotting choices are automatically
-logged in the plot caption.</p></li>
+<code>process_plate()</code> requires a <code>plot.title</code>
+parameter, which is then passed to <code>plot_abs()</code>. Similarly,
+<code>expt.dates</code> will feed into the plot’s subtitle.
+Data-analysis and plotting choices are automatically logged in the plot
+caption.</p></li>
 </ul>
 </li>
 </ul>
 </div>
 </div>
-<div id="documenting-the-package-and-building" class="section level1">
-<h1>Documenting the package and building</h1>
-<p>We finish by running commands that will document and install the
-package.</p>
+<div id="finishing-up" class="section level1">
+<h1>Finishing up</h1>
+<div id="add-a-readme" class="section level2">
+<h2>Add a README</h2>
+<p>Our README.Rmd lives in the <code>source-files</code> directory. We
+add <code>README.Rmd</code> to the package and then, in the top-level
+project directory, generate the <code>README.md</code> based on it:</p>
+<pre class="r"><code>litr::add_readme("../source-files/README.Rmd")</code></pre>
+<pre><code>## ✔ Writing 'README.Rmd'.</code></pre>
+<pre><code>## ✔ Adding "^README\\.Rmd$" to '.Rbuildignore'.</code></pre>
+<pre><code>## ✔ Creating '.git/hooks/'.</code></pre>
+<pre><code>## ✔ Writing '.git/hooks/pre-commit'.</code></pre>
+</div>
+<div id="document-and-install" class="section level2">
+<h2>Document and install</h2>
+<p>Back in the <code>create-stratocastR</code> directory, we finish by
+running commands that will document and install the package.</p>
 <pre class="r"><code>litr::document()
 devtools::install()</code></pre>
 <pre><code>## ℹ Updating stratocastR documentation
@@ -517,7 +540,7 @@ devtools::install()</code></pre>
 ## Writing 'get_interval_min.Rd'
 ## Writing 'subtract_background.Rd'</code></pre>
 <pre><code>## 
-## ── R CMD build ────────────────────────────────────────────────────────────────────────────────────────────────
+## ── R CMD build ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ##      checking for file ‘/Users/scbagby/Desktop/scripts/R snippets/plate reader data handling/stratocastR-project/stratocastR/DESCRIPTION’ ...  ✔  checking for file ‘/Users/scbagby/Desktop/scripts/R snippets/plate reader data handling/stratocastR-project/stratocastR/DESCRIPTION’
 ##   ─  preparing ‘stratocastR’:
 ##      checking DESCRIPTION meta-information ...  ✔  checking DESCRIPTION meta-information
@@ -528,10 +551,10 @@ devtools::install()</code></pre>
 ##      pipe |&gt; or function shorthand \(...) syntax added in R 4.1.0.
 ##      File(s) using such syntax:
 ##        ‘detect_outliers.R’
-## ─  building ‘stratocastR_0.0.0.9000.tar.gz’
+##   ─  building ‘stratocastR_0.0.0.9000.tar.gz’
 ##      
 ## Running /Library/Frameworks/R.framework/Resources/bin/R CMD INSTALL \
-##   /var/folders/48/yrft_5dj0hb2wm0lpbz8jfcc0000gn/T//RtmpV3Nxiz/stratocastR_0.0.0.9000.tar.gz \
+##   /var/folders/48/yrft_5dj0hb2wm0lpbz8jfcc0000gn/T//RtmpztbRea/stratocastR_0.0.0.9000.tar.gz \
 ##   --install-tests 
 ## * installing to library ‘/Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library’
 ## * installing *source* package ‘stratocastR’ ...
@@ -546,6 +569,7 @@ devtools::install()</code></pre>
 ## ** testing if installed package can be loaded from final location
 ## ** testing if installed package keeps a record of temporary installation path
 ## * DONE (stratocastR)</code></pre>
+</div>
 </div>
 
 
