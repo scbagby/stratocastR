@@ -30,7 +30,7 @@ output filename, running `stratocastR::process_plate()` will
 
 With `devtools` installed, you can install stratocastR from github using
 
-    remotes::install_github("scbagby/stratocastR-project", subdir = "stratocastR")
+    remotes::install_github("scbagby/stratocastR", subdir = "stratocastR")
 
 # Getting started
 
