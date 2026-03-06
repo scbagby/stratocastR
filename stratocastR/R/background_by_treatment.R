@@ -88,7 +88,7 @@ background_by_wells <- function(bgfile) {
     stopifnot("Background layout file must be either .csv or .xlsx" =
                   bgfiletype %in% c("csv", "xlsx"))
     if (bgfiletype == "csv") {
-        bg <- readr::read_csv(bgfile, skip = 4, comment = "#", col_types = cols())
+        bg <- readr::read_csv(bgfile, skip = 4, comment = "#", col_types = readr::cols())
         bgdelim <- grep("delim", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
         blank <- grep("blank", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
         test <- grep("test", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)

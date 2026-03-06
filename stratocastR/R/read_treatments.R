@@ -12,7 +12,7 @@ read_treatments <- function(treatments) {
     stopifnot("Plate layout file must be either .csv or .xlsx" =
                   filetype %in% c("csv", "xlsx"))
     if (filetype == "csv") {
-        metadata <- readr::read_csv(treatments, col_types = cols())
+        metadata <- readr::read_csv(treatments, col_types = readr::cols())
     } else {
         metadata <- readxl::read_xlsx(treatments)
     }
@@ -34,7 +34,7 @@ read_treatments <- function(treatments) {
 #' @export
 read_platedata <- function(filename, treatments = NULL) {
     stopifnot("Data file must be a .csv" = xfun::file_ext(filename) == "csv")
-    data <- {readr::read_csv(filename, col_types = cols(), skip = 12,
+    data <- {readr::read_csv(filename, col_types = readr::cols(), skip = 12,
                              name_repair = "unique_quiet") |>
                  dplyr::rename("datetime" = `Date and Time`,
                                "duration.h" = `Duration (Hours)`,
