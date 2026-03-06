@@ -44,11 +44,11 @@ subtract_background <- function(data, bg, iter = 1, basis = c("mean", "median"),
         }
         bgfeeder <- dplyr::filter(bgfeeder, !is.outlier.abs)
     }
-    bgs <- {as.data.frame(bgfeeder) %>%
-                dplyr::group_by(bggroup, duration.min) %>%
+    bgs <- {as.data.frame(bgfeeder) |>
+                dplyr::group_by(bggroup, duration.min) |>
                 dplyr::summarise(bg.agg = rlang::exec(basis, absorbance),
                                  bg.n = dplyr::n())}
-    data <- {dplyr::left_join(data, bgs) %>%
+    data <- {dplyr::left_join(data, bgs) |>
                  dplyr::mutate(bg.n = tidyr::replace_na(bg.n, 0),
                                abs.corr = dplyr::case_when(bgtype == "ignore" ~ NA,
                                                            bg.n < threshold ~ NA,

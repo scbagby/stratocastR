@@ -19,23 +19,23 @@ detect_outliers <- function(data, interval, iter = 1,
                             incol = c("absorbance", "abs.corr", "airtemp.C")) {
     outcol <- ifelse(incol == "airtemp.C", "is.outlier.temp", "is.outlier.abs")
     data <- tsibble::as_tsibble(data, key = well, index = timestamp)
-    outs <- {data %>%
-                 split(data$well) %>%
+    outs <- {data |>
+                 split(data$well) |>
                  purrr::map(\(tsib) data.frame(well = unique(tsib$well),
                                                outstep =
                                                    forecast::tsoutliers(tsib[[incol]],
                                                                         iterate = iter)$index,
-                                               is.outlier = TRUE)) %>%
-                 dplyr::bind_rows() %>%
-                 dplyr::mutate(duration.min = interval * outstep) %>%
+                                               is.outlier = TRUE)) |>
+                 dplyr::bind_rows() |>
+                 dplyr::mutate(duration.min = interval * outstep) |>
                  dplyr::select(-outstep)}
-    data <- {dplyr::left_join(data, outs) %>%
-                 dplyr::mutate(is.outlier = tidyr::replace_na(is.outlier, FALSE)) %>%
+    data <- {dplyr::left_join(data, outs) |>
+                 dplyr::mutate(is.outlier = tidyr::replace_na(is.outlier, FALSE)) |>
                  dplyr::rename_with(~outcol, is.outlier)}
     if (incol != "airtemp.C") {
-        problem.steps <- {data %>%
-                              as.data.frame() %>%
-                              dplyr::group_by(duration.min, bgtype) %>%
+        problem.steps <- {data |>
+                              as.data.frame() |>
+                              dplyr::group_by(duration.min, bgtype) |>
                               dplyr::summarise(n.out.bgtype = sum(is.outlier.abs))}
         data <- dplyr::left_join(data, problem.steps)
     }

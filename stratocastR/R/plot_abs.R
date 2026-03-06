@@ -36,24 +36,24 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
     if (!show.ignores) {data <- dplyr::filter(data, bgtype != "ignore")}
 
     # Subset and aggregate data for different panels
-    toplot.T <- {dplyr::filter(data, well == "A1") %>%
+    toplot.T <- {dplyr::filter(data, well == "A1") |>
                      dplyr::select(duration.h, duration.min, airtemp.C, n.out)}
     toplot <- dplyr::mutate(data,
                             platerow = substr(well, 1, 1),
-                            platecol = gsub("[A-H]", "", well) %>%
+                            platecol = gsub("[A-H]", "", well) |>
                                 factor(levels = 1:12, ordered = TRUE))
     toplot.n <- dplyr::filter(toplot, platerow == "A")
     boxleft <- quantile(toplot.T$duration.h, probs = 0.01)
     boxright <- quantile(toplot.T$duration.h, probs = 0.06)
     lableft <- quantile(toplot.T$duration.h, probs = 0.08)
-    bggroups <- {as.data.frame(toplot) %>%
-                     dplyr::filter(!grepl("outlier", bggroup)) %>%
-                     dplyr::group_by(platerow, platecol) %>%
+    bggroups <- {as.data.frame(toplot) |>
+                     dplyr::filter(!grepl("outlier", bggroup)) |>
+                     dplyr::group_by(platerow, platecol) |>
                      dplyr::summarise(grouplab =
-                                          paste0("Group ", first(bggroup))) %>%
+                                          paste0("Group ", first(bggroup))) |>
                      dplyr::mutate(xmin = boxleft,
                                    xmax = boxright,
-                                   lableft = lableft) %>%
+                                   lableft = lableft) |>
                      dplyr::ungroup()}
     ngroups <- length(unique(bggroups$grouplab))
     toplot.points <- toplot

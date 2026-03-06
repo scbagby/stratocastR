@@ -9,7 +9,7 @@ make_layout_file <- function(filename) {
     stopifnot("Plate layout file must be either .csv or .xlsx" =
                   filetype %in% c("csv", "xlsx"))
     template <- {expand.grid(platerow = LETTERS[1:8], platecol = paste0("c", 1:12),
-                             val = NA) %>%
+                             val = NA) |>
                      tidyr::pivot_wider(names_from = platecol, values_from = val)}
     if (filetype == "csv") {
         readr::write_csv(template, filename)

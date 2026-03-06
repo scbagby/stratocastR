@@ -16,12 +16,12 @@ read_treatments <- function(treatments) {
     } else {
         metadata <- readxl::read_xlsx(treatments)
     }
-    metadata <- {metadata %>%
+    metadata <- {metadata |>
                      tidyr::pivot_longer(-platerow,
                                          names_to = "platecol",
                                          names_prefix = "c",
-                                         values_to = "treatment") %>%
-                     dplyr::mutate(well = paste0(platerow, platecol)) %>%
+                                         values_to = "treatment") |>
+                     dplyr::mutate(well = paste0(platerow, platecol)) |>
                      dplyr::select(well, treatment)}
     return(metadata)
 }
@@ -35,16 +35,16 @@ read_treatments <- function(treatments) {
 read_platedata <- function(filename, treatments = NULL) {
     stopifnot("Data file must be a .csv" = xfun::file_ext(filename) == "csv")
     data <- {readr::read_csv(filename, col_types = cols(), skip = 12,
-                             name_repair = "unique_quiet") %>%
+                             name_repair = "unique_quiet") |>
                  dplyr::rename("datetime" = `Date and Time`,
                                "duration.h" = `Duration (Hours)`,
                                "duration.min" = `Duration (Minutes)`,
                                "unixtime" = `UNIX Timestamp`,
-                               "airtemp.C" = `Air Temp`) %>%
+                               "airtemp.C" = `Air Temp`) |>
                  tidyr::pivot_longer(!(datetime:airtemp.C),
-                                     names_to = "well", values_to = "absorbance") %>%
-                 dplyr::mutate(timestamp = anytime(unixtime)) %>%
-                 dplyr::filter(!grepl("\\.\\.\\.", well)) %>% 
+                                     names_to = "well", values_to = "absorbance") |>
+                 dplyr::mutate(timestamp = anytime(unixtime)) |>
+                 dplyr::filter(!grepl("\\.\\.\\.", well)) |> 
                  dplyr::select(timestamp, duration.h, duration.min, airtemp.C,
                                well, absorbance)}
     if (!is.null(treatments))

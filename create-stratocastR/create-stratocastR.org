@@ -139,7 +139,7 @@ make_layout_file <- function(filename) {
     stopifnot("Plate layout file must be either .csv or .xlsx" =
                   filetype %in% c("csv", "xlsx"))
     template <- {expand.grid(platerow = LETTERS[1:8], platecol = paste0("c", 1:12),
-                             val = NA) %>%
+                             val = NA) |>
                      tidyr::pivot_wider(names_from = platecol, values_from = val)}
     if (filetype == "csv") {
         readr::write_csv(template, filename)
@@ -168,12 +168,12 @@ read_treatments <- function(treatments) {
     } else {
         metadata <- readxl::read_xlsx(treatments)
     }
-    metadata <- {metadata %>%
+    metadata <- {metadata |>
                      tidyr::pivot_longer(-platerow,
                                          names_to = "platecol",
                                          names_prefix = "c",
-                                         values_to = "treatment") %>%
-                     dplyr::mutate(well = paste0(platerow, platecol)) %>%
+                                         values_to = "treatment") |>
+                     dplyr::mutate(well = paste0(platerow, platecol)) |>
                      dplyr::select(well, treatment)}
     return(metadata)
 }
@@ -187,16 +187,16 @@ read_treatments <- function(treatments) {
 read_platedata <- function(filename, treatments = NULL) {
     stopifnot("Data file must be a .csv" = xfun::file_ext(filename) == "csv")
     data <- {readr::read_csv(filename, col_types = cols(), skip = 12,
-                             name_repair = "unique_quiet") %>%
+                             name_repair = "unique_quiet") |>
                  dplyr::rename("datetime" = `Date and Time`,
                                "duration.h" = `Duration (Hours)`,
                                "duration.min" = `Duration (Minutes)`,
                                "unixtime" = `UNIX Timestamp`,
-                               "airtemp.C" = `Air Temp`) %>%
+                               "airtemp.C" = `Air Temp`) |>
                  tidyr::pivot_longer(!(datetime:airtemp.C),
-                                     names_to = "well", values_to = "absorbance") %>%
-                 dplyr::mutate(timestamp = anytime(unixtime)) %>%
-                 dplyr::filter(!grepl("\\.\\.\\.", well)) %>% 
+                                     names_to = "well", values_to = "absorbance") |>
+                 dplyr::mutate(timestamp = anytime(unixtime)) |>
+                 dplyr::filter(!grepl("\\.\\.\\.", well)) |> 
                  dplyr::select(timestamp, duration.h, duration.min, airtemp.C,
                                well, absorbance)}
     if (!is.null(treatments))
@@ -247,23 +247,23 @@ detect_outliers <- function(data, interval, iter = 1,
                             incol = c("absorbance", "abs.corr", "airtemp.C")) {
     outcol <- ifelse(incol == "airtemp.C", "is.outlier.temp", "is.outlier.abs")
     data <- tsibble::as_tsibble(data, key = well, index = timestamp)
-    outs <- {data %>%
-                 split(data$well) %>%
+    outs <- {data |>
+                 split(data$well) |>
                  purrr::map(\(tsib) data.frame(well = unique(tsib$well),
                                                outstep =
                                                    forecast::tsoutliers(tsib[[incol]],
                                                                         iterate = iter)$index,
-                                               is.outlier = TRUE)) %>%
-                 dplyr::bind_rows() %>%
-                 dplyr::mutate(duration.min = interval * outstep) %>%
+                                               is.outlier = TRUE)) |>
+                 dplyr::bind_rows() |>
+                 dplyr::mutate(duration.min = interval * outstep) |>
                  dplyr::select(-outstep)}
-    data <- {dplyr::left_join(data, outs) %>%
-                 dplyr::mutate(is.outlier = tidyr::replace_na(is.outlier, FALSE)) %>%
+    data <- {dplyr::left_join(data, outs) |>
+                 dplyr::mutate(is.outlier = tidyr::replace_na(is.outlier, FALSE)) |>
                  dplyr::rename_with(~outcol, is.outlier)}
     if (incol != "airtemp.C") {
-        problem.steps <- {data %>%
-                              as.data.frame() %>%
-                              dplyr::group_by(duration.min, bgtype) %>%
+        problem.steps <- {data |>
+                              as.data.frame() |>
+                              dplyr::group_by(duration.min, bgtype) |>
                               dplyr::summarise(n.out.bgtype = sum(is.outlier.abs))}
         data <- dplyr::left_join(data, problem.steps)
     }
@@ -297,7 +297,7 @@ For each well, we want to designate whether it contains a blank or a test condit
 #'   groups
 #' @export
 background_by_treatment <- function(test, blanks, ignore = NULL, treatments) {
-    bg <- {read_treatments(treatments) %>%
+    bg <- {read_treatments(treatments) |>
                mutate(bgtype = dplyr::case_when(treatment == test ~ "test",
                                                 treatment == blanks ~ "blank",
                                                 treatment %in% ignore ~ "ignore",
@@ -322,7 +322,7 @@ make_bg_file <- function(filename) {
     stopifnot("Plate layout file must be either .csv or .xlsx" =
                   filetype %in% c("csv", "xlsx"))
     template <- {expand.grid(platerow = LETTERS[1:8], platecol = paste0("c", 1:12),
-                             val = NA) %>%
+                             val = NA) |>
                      tidyr::pivot_wider(names_from = platecol, values_from = val)}
     header <- c("delim", "blank", "test", "ignore")
     instructions <- c("# Fill in each well's background group and well type, separated",
@@ -367,32 +367,32 @@ background_by_wells <- function(bgfile) {
                   bgfiletype %in% c("csv", "xlsx"))
     if (bgfiletype == "csv") {
         bg <- readr::read_csv(bgfile, skip = 4, comment = "#", col_types = cols())
-        bgdelim <- grep("delim", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
-        blank <- grep("blank", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
-        test <- grep("test", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
-        ignore <- grep("ignore", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
+        bgdelim <- grep("delim", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
+        blank <- grep("blank", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
+        test <- grep("test", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
+        ignore <- grep("ignore", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
     } else {
-        bg <- {readxl::read_xlsx(bgfile, sheet = "layout") %>%
+        bg <- {readxl::read_xlsx(bgfile, sheet = "layout") |>
                    filter(!grepl("^#", platerow))}
-        params <- {readxl::read_xlsx(bgfile, sheet = "params") %>%
+        params <- {readxl::read_xlsx(bgfile, sheet = "params") |>
                        select(-instructions)}
         bgdelim <- params$value[params$parameter == "delim"]
         blank <- params$value[params$parameter == "blank"]
         test <- params$value[params$parameter == "test"]
         ignore <- params$value[params$parameter == "ignore"]
     }
-    bg <- {bg %>%
+    bg <- {bg |>
                tidyr::pivot_longer(-platerow,
                                    names_to = "platecol",
                                    names_prefix = "c",
-                                   values_to = "bgcode") %>%
-               dplyr::mutate(well = paste0(platerow, platecol)) %>%
+                                   values_to = "bgcode") |>
+               dplyr::mutate(well = paste0(platerow, platecol)) |>
                tidyr::separate_wider_delim(bgcode, names = c("bggroup", "bgtype"),
-                                           delim = bgdelim) %>%
+                                           delim = bgdelim) |>
                dplyr::mutate(bgtype = dplyr::case_when(bgtype == blank ~ "blank",
                                                        bgtype == test ~ "test",
                                                        bgtype == ignore ~ "ignore",
-                                                       TRUE ~ NA)) %>%
+                                                       TRUE ~ NA)) |>
                dplyr::select(well, bgtype, bggroup)}
     if (any(is.na(bg$bgtype))) {warning("Some wells are not marked as blank, test, or ignore")}
     return(bg)
@@ -446,11 +446,11 @@ subtract_background <- function(data, bg, iter = 1, basis = c("mean", "median"),
         }
         bgfeeder <- dplyr::filter(bgfeeder, !is.outlier.abs)
     }
-    bgs <- {as.data.frame(bgfeeder) %>%
-                dplyr::group_by(bggroup, duration.min) %>%
+    bgs <- {as.data.frame(bgfeeder) |>
+                dplyr::group_by(bggroup, duration.min) |>
                 dplyr::summarise(bg.agg = rlang::exec(basis, absorbance),
                                  bg.n = dplyr::n())}
-    data <- {dplyr::left_join(data, bgs) %>%
+    data <- {dplyr::left_join(data, bgs) |>
                  dplyr::mutate(bg.n = tidyr::replace_na(bg.n, 0),
                                abs.corr = dplyr::case_when(bgtype == "ignore" ~ NA,
                                                            bg.n < threshold ~ NA,
@@ -505,24 +505,24 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
     if (!show.ignores) {data <- dplyr::filter(data, bgtype != "ignore")}
 
     # Subset and aggregate data for different panels
-    toplot.T <- {dplyr::filter(data, well == "A1") %>%
+    toplot.T <- {dplyr::filter(data, well == "A1") |>
                      dplyr::select(duration.h, duration.min, airtemp.C, n.out)}
     toplot <- dplyr::mutate(data,
                             platerow = substr(well, 1, 1),
-                            platecol = gsub("[A-H]", "", well) %>%
+                            platecol = gsub("[A-H]", "", well) |>
                                 factor(levels = 1:12, ordered = TRUE))
     toplot.n <- dplyr::filter(toplot, platerow == "A")
     boxleft <- quantile(toplot.T$duration.h, probs = 0.01)
     boxright <- quantile(toplot.T$duration.h, probs = 0.06)
     lableft <- quantile(toplot.T$duration.h, probs = 0.08)
-    bggroups <- {as.data.frame(toplot) %>%
-                     dplyr::filter(!grepl("outlier", bggroup)) %>%
-                     dplyr::group_by(platerow, platecol) %>%
+    bggroups <- {as.data.frame(toplot) |>
+                     dplyr::filter(!grepl("outlier", bggroup)) |>
+                     dplyr::group_by(platerow, platecol) |>
                      dplyr::summarise(grouplab =
-                                          paste0("Group ", first(bggroup))) %>%
+                                          paste0("Group ", first(bggroup))) |>
                      dplyr::mutate(xmin = boxleft,
                                    xmax = boxright,
-                                   lableft = lableft) %>%
+                                   lableft = lableft) |>
                      dplyr::ungroup()}
     ngroups <- length(unique(bggroups$grouplab))
     toplot.points <- toplot
@@ -748,9 +748,9 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
                                       blanks = background.treatments$blanks,
                                       ignore = background.treatments$ignore)
     }
-    bgcounts <- {bg %>%
-                     dplyr::filter(bgtype != "ignore") %>%
-                     dplyr::group_by(bgtype) %>%
+    bgcounts <- {bg |>
+                     dplyr::filter(bgtype != "ignore") |>
+                     dplyr::group_by(bgtype) |>
                      dplyr::summarise(n.meas = dplyr::n())}
     nonignores <- sum(bgcounts$n.meas)
 
@@ -763,10 +763,10 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
 
     # Detect outliers in background-subtracted test wells.  
     bgsub.bi <- dplyr::filter(bgsub, bgtype %in% c("blank", "ignore"))
-    bgsub.t <- {dplyr::filter(bgsub, bgtype == "test") %>%
-                    dplyr::select(-is.outlier.abs, -n.out.bgtype) %>%
+    bgsub.t <- {dplyr::filter(bgsub, bgtype == "test") |>
+                    dplyr::select(-is.outlier.abs, -n.out.bgtype) |>
                     detect_outliers(data = ., interval = interval.min, iter = ts.iter,
-                                    incol = "abs.corr") %>%
+                                    incol = "abs.corr") |>
                     dplyr::mutate(flag = case_when(bgtype == "test" & is.outlier.abs ~
                                                        "Outlier after background subtraction",
                                                    bgtype == "test" ~ flag,
@@ -774,11 +774,11 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
     bgsub.all <- dplyr::bind_rows(bgsub.bi, bgsub.t)
 
     # Tally absorbance outliers and check for outliers in temperature data.
-    problem.steps <- {bgsub.all %>% 
-                          dplyr::group_by(duration.min) %>%
-                          dplyr::summarise(n.out = sum(is.outlier.abs, na.rm = TRUE)) %>%
+    problem.steps <- {bgsub.all |> 
+                          dplyr::group_by(duration.min) |>
+                          dplyr::summarise(n.out = sum(is.outlier.abs, na.rm = TRUE)) |>
                           dplyr::mutate(pct.out = n.out / nonignores)}
-    bgsub.all <- {dplyr::left_join(bgsub.all, problem.steps) %>%
+    bgsub.all <- {dplyr::left_join(bgsub.all, problem.steps) |>
                       detect_outliers(interval.min, incol = "airtemp.C")}
     
     # Set caption to capture data-handling choices

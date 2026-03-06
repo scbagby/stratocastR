@@ -67,9 +67,9 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
                                       blanks = background.treatments$blanks,
                                       ignore = background.treatments$ignore)
     }
-    bgcounts <- {bg %>%
-                     dplyr::filter(bgtype != "ignore") %>%
-                     dplyr::group_by(bgtype) %>%
+    bgcounts <- {bg |>
+                     dplyr::filter(bgtype != "ignore") |>
+                     dplyr::group_by(bgtype) |>
                      dplyr::summarise(n.meas = dplyr::n())}
     nonignores <- sum(bgcounts$n.meas)
 
@@ -82,10 +82,10 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
 
     # Detect outliers in background-subtracted test wells.  
     bgsub.bi <- dplyr::filter(bgsub, bgtype %in% c("blank", "ignore"))
-    bgsub.t <- {dplyr::filter(bgsub, bgtype == "test") %>%
-                    dplyr::select(-is.outlier.abs, -n.out.bgtype) %>%
+    bgsub.t <- {dplyr::filter(bgsub, bgtype == "test") |>
+                    dplyr::select(-is.outlier.abs, -n.out.bgtype) |>
                     detect_outliers(data = ., interval = interval.min, iter = ts.iter,
-                                    incol = "abs.corr") %>%
+                                    incol = "abs.corr") |>
                     dplyr::mutate(flag = case_when(bgtype == "test" & is.outlier.abs ~
                                                        "Outlier after background subtraction",
                                                    bgtype == "test" ~ flag,
@@ -93,11 +93,11 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
     bgsub.all <- dplyr::bind_rows(bgsub.bi, bgsub.t)
 
     # Tally absorbance outliers and check for outliers in temperature data.
-    problem.steps <- {bgsub.all %>% 
-                          dplyr::group_by(duration.min) %>%
-                          dplyr::summarise(n.out = sum(is.outlier.abs, na.rm = TRUE)) %>%
+    problem.steps <- {bgsub.all |> 
+                          dplyr::group_by(duration.min) |>
+                          dplyr::summarise(n.out = sum(is.outlier.abs, na.rm = TRUE)) |>
                           dplyr::mutate(pct.out = n.out / nonignores)}
-    bgsub.all <- {dplyr::left_join(bgsub.all, problem.steps) %>%
+    bgsub.all <- {dplyr::left_join(bgsub.all, problem.steps) |>
                       detect_outliers(interval.min, incol = "airtemp.C")}
     
     # Set caption to capture data-handling choices

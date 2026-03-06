@@ -19,7 +19,7 @@
 #'   groups
 #' @export
 background_by_treatment <- function(test, blanks, ignore = NULL, treatments) {
-    bg <- {read_treatments(treatments) %>%
+    bg <- {read_treatments(treatments) |>
                mutate(bgtype = dplyr::case_when(treatment == test ~ "test",
                                                 treatment == blanks ~ "blank",
                                                 treatment %in% ignore ~ "ignore",
@@ -44,7 +44,7 @@ make_bg_file <- function(filename) {
     stopifnot("Plate layout file must be either .csv or .xlsx" =
                   filetype %in% c("csv", "xlsx"))
     template <- {expand.grid(platerow = LETTERS[1:8], platecol = paste0("c", 1:12),
-                             val = NA) %>%
+                             val = NA) |>
                      tidyr::pivot_wider(names_from = platecol, values_from = val)}
     header <- c("delim", "blank", "test", "ignore")
     instructions <- c("# Fill in each well's background group and well type, separated",
@@ -89,32 +89,32 @@ background_by_wells <- function(bgfile) {
                   bgfiletype %in% c("csv", "xlsx"))
     if (bgfiletype == "csv") {
         bg <- readr::read_csv(bgfile, skip = 4, comment = "#", col_types = cols())
-        bgdelim <- grep("delim", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
-        blank <- grep("blank", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
-        test <- grep("test", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
-        ignore <- grep("ignore", readLines(bgfile, n = 4), value = TRUE) %>% sub("^.*:[ ]?", "", .)
+        bgdelim <- grep("delim", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
+        blank <- grep("blank", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
+        test <- grep("test", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
+        ignore <- grep("ignore", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
     } else {
-        bg <- {readxl::read_xlsx(bgfile, sheet = "layout") %>%
+        bg <- {readxl::read_xlsx(bgfile, sheet = "layout") |>
                    filter(!grepl("^#", platerow))}
-        params <- {readxl::read_xlsx(bgfile, sheet = "params") %>%
+        params <- {readxl::read_xlsx(bgfile, sheet = "params") |>
                        select(-instructions)}
         bgdelim <- params$value[params$parameter == "delim"]
         blank <- params$value[params$parameter == "blank"]
         test <- params$value[params$parameter == "test"]
         ignore <- params$value[params$parameter == "ignore"]
     }
-    bg <- {bg %>%
+    bg <- {bg |>
                tidyr::pivot_longer(-platerow,
                                    names_to = "platecol",
                                    names_prefix = "c",
-                                   values_to = "bgcode") %>%
-               dplyr::mutate(well = paste0(platerow, platecol)) %>%
+                                   values_to = "bgcode") |>
+               dplyr::mutate(well = paste0(platerow, platecol)) |>
                tidyr::separate_wider_delim(bgcode, names = c("bggroup", "bgtype"),
-                                           delim = bgdelim) %>%
+                                           delim = bgdelim) |>
                dplyr::mutate(bgtype = dplyr::case_when(bgtype == blank ~ "blank",
                                                        bgtype == test ~ "test",
                                                        bgtype == ignore ~ "ignore",
-                                                       TRUE ~ NA)) %>%
+                                                       TRUE ~ NA)) |>
                dplyr::select(well, bgtype, bggroup)}
     if (any(is.na(bg$bgtype))) {warning("Some wells are not marked as blank, test, or ignore")}
     return(bg)
