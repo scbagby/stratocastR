@@ -43,7 +43,7 @@ read_platedata <- function(filename, treatments = NULL) {
                                "airtemp.C" = `Air Temp`) |>
                  tidyr::pivot_longer(!(datetime:airtemp.C),
                                      names_to = "well", values_to = "absorbance") |>
-                 dplyr::mutate(timestamp = anytime(unixtime)) |>
+                 dplyr::mutate(timestamp = anytime::anytime(unixtime)) |>
                  dplyr::filter(!grepl("\\.\\.\\.", well)) |> 
                  dplyr::select(timestamp, duration.h, duration.min, airtemp.C,
                                well, absorbance)}

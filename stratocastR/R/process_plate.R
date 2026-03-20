@@ -86,10 +86,10 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
                     dplyr::select(-is.outlier.abs, -n.out.bgtype) |>
                     detect_outliers(data = ., interval = interval.min, iter = ts.iter,
                                     incol = "abs.corr") |>
-                    dplyr::mutate(flag = case_when(bgtype == "test" & is.outlier.abs ~
-                                                       "Outlier after background subtraction",
-                                                   bgtype == "test" ~ flag,
-                                                   TRUE ~ flag))}
+                    dplyr::mutate(flag = dplyr::case_when(bgtype == "test" & is.outlier.abs ~
+                                                              "Outlier after background subtraction",
+                                                          bgtype == "test" ~ flag,
+                                                          TRUE ~ flag))}
     bgsub.all <- dplyr::bind_rows(bgsub.bi, bgsub.t)
 
     # Tally absorbance outliers and check for outliers in temperature data.
@@ -130,7 +130,7 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
                   use.corr = use.corr, show.ignores = show.ignores, title = plot.title,
                   dates = expt.dates, caption = plot.caption)
     if (display.plot) {p}
-    if (!is.null(outfile)) {ggsave(outfile, width = 14.5, height = 8)}
+    if (!is.null(outfile)) {ggplot2::ggsave(outfile, width = 14.5, height = 8)}
     
     return(list(data = bgsub.all, plot = p))
 }

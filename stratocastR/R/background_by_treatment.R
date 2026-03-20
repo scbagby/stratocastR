@@ -95,9 +95,9 @@ background_by_wells <- function(bgfile) {
         ignore <- grep("ignore", readLines(bgfile, n = 4), value = TRUE) |> sub("^.*:[ ]?", "", .)
     } else {
         bg <- {readxl::read_xlsx(bgfile, sheet = "layout") |>
-                   filter(!grepl("^#", platerow))}
+                   dplyr::filter(!grepl("^#", platerow))}
         params <- {readxl::read_xlsx(bgfile, sheet = "params") |>
-                       select(-instructions)}
+                       dplyr::select(-instructions)}
         bgdelim <- params$value[params$parameter == "delim"]
         blank <- params$value[params$parameter == "blank"]
         test <- params$value[params$parameter == "test"]

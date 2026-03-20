@@ -50,7 +50,7 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
                      dplyr::filter(!grepl("outlier", bggroup)) |>
                      dplyr::group_by(platerow, platecol) |>
                      dplyr::summarise(grouplab =
-                                          paste0("Group ", first(bggroup))) |>
+                                          paste0("Group ", dplyr::first(bggroup))) |>
                      dplyr::mutate(xmin = boxleft,
                                    xmax = boxright,
                                    lableft = lableft) |>
@@ -87,7 +87,7 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
                        legend.spacing.y = unit(1, "pt"),
                        legend.key.width = unit(8, "pt"),
                        legend.key.height = unit(8, "pt"),
-                       legend.margin = margin(2, 60, 2, 0),
+                       legend.margin = ggplot2::margin(2, 60, 2, 0),
                        panel.grid = ggplot2::element_blank()) +
         ggplot2::guides(colour = ggplot2::guide_legend(nrow = 2,
                                                        override.aes = list(size = 2)))
@@ -98,13 +98,13 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
     p.bywell <- p + ggplot2::facet_grid(platerow ~ platecol, drop = FALSE)
     if (ngroups > 1) {
         p.bywell <- p.bywell +
-            geom_rect(data = bggroups,
-                      ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0.95, ymax = 1.05,
-                          fill = grouplab)) +
-            geom_text(data = bggroups,
-                      ggplot2::aes(x = lableft, y = 1, label = grouplab),
-                      hjust = 0, size = 2, family = "Avenir Next Condensed") +
-            scale_fill_brewer(palette = "Dark2", guide = "none")
+            ggplot2::geom_rect(data = bggroups,
+                               ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0.95, ymax = 1.05,
+                                            fill = grouplab)) +
+            ggplot2::geom_text(data = bggroups,
+                               ggplot2::aes(x = lableft, y = 1, label = grouplab),
+                               hjust = 0, size = 2, family = "Avenir Next Condensed") +
+            ggplot2::scale_fill_brewer(palette = "Dark2", guide = "none")
     }
     p.T <- ggplot2::ggplot(toplot.T, ggplot2::aes(duration.h, airtemp.C)) +
         ggplot2::geom_line() +
@@ -126,7 +126,7 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
               axis.ticks.y = ggplot2::element_blank(),
               axis.title.x = ggplot2::element_blank(),
               axis.text.x = ggplot2::element_blank(),
-              legend.margin = margin_auto(2, unit = "pt"),
+              legend.margin = ggplot2::margin_auto(2, unit = "pt"),
               panel.grid = ggplot2::element_blank()) +
         ggplot2::scale_colour_viridis_c(option = "inferno") +
         ggplot2::facet_grid(. ~ platecol, drop = FALSE)
@@ -146,7 +146,7 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
               axis.title.y = ggplot2::element_text(angle = 0, vjust = 0.5),
               axis.text.y = ggplot2::element_blank(),
               axis.ticks.y = ggplot2::element_blank(),
-              legend.margin = margin_auto(0, unit = "pt"),
+              legend.margin = ggplot2::margin_auto(0, unit = "pt"),
               panel.grid = ggplot2::element_blank()) +
         ggplot2::facet_grid(. ~ platecol, drop = FALSE)
     layout <- "
