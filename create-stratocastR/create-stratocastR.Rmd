@@ -146,7 +146,7 @@ read_platedata <- function(filename, treatments = NULL) {
 get_interval_min <- function(filename) {
     stopifnot("Data file must be a .csv" = xfun::file_ext(filename) == "csv")
     header <- readLines(filename, n = 12)
-    interval <- header[which(grepl("Interval", header))]
+    interval <- header[which(grepl("Interval", header))] |> sub(",*$", "", header)
     stopifnot("No interval metadata found; check file header" =
                   length(interval) != 0)
     interval_min <- as.numeric(sub(".*:,", "", interval)) / 60
