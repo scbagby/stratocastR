@@ -702,7 +702,7 @@ process_plate <- function(filename, treatments, background.file = NULL, backgrou
     bgsub.bi <- dplyr::filter(bgsub, bgtype %in% c("blank", "ignore"))
     bgsub.t <- {dplyr::filter(bgsub, bgtype == "test") |>
                     dplyr::select(-is.outlier.abs, -n.out.bgtype) |>
-                    detect_outliers(data = ., interval = interval.min, iter = ts.iter,
+                    detect_outliers(data = _, interval = interval.min, iter = ts.iter,
                                     incol = "abs.corr") |>
                     dplyr::mutate(flag = dplyr::case_when(bgtype == "test" & is.outlier.abs ~
                                                               "Outlier after background subtraction",

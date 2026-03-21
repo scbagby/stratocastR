@@ -25,7 +25,7 @@ Given the data and metadata (Cerillo file, plate layout, background setup, exper
 
 With `devtools` installed, you can install stratocastR from github using
 
-    remotes::install_github("scbagby/stratocastR-project", subdir = "stratocastR")
+    remotes::install_github("scbagby/stratocastR", subdir = "stratocastR")
 
 
 # Getting started
