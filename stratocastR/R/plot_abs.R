@@ -168,6 +168,6 @@ FFFFFFFFFFFG
                                       E = p.nout, F = p.Tstrip, G = patchwork::guide_area(),
                                       design = layout, guides = "collect") +
         patchwork::plot_annotation(title = title, subtitle = dates, caption = caption) &
-        ggplot2::theme(text = ggplot::element_text(family = "Avenir Next Condensed"))
+        ggplot2::theme(text = ggplot2::element_text(family = "Avenir Next Condensed"))
     return(p.master)
 }
