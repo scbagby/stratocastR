@@ -165,7 +165,7 @@ EEEEEEEEEEEG
 FFFFFFFFFFFG
 "
     p.master <- patchwork::wrap_plots(A = p.bywell, B = p.byrow, C = p.bycol, D = p.T,
-                                      E = p.nout, F = p.Tstrip, G = guide_area(),
+                                      E = p.nout, F = p.Tstrip, G = patchwork::guide_area(),
                                       design = layout, guides = "collect") +
         patchwork::plot_annotation(title = title, subtitle = dates, caption = caption) &
         ggplot2::theme(text = element_text(family = "Avenir Next Condensed"))
