@@ -130,7 +130,7 @@ plot_abs <- function(data, exclude.outliers = TRUE, threshold = 1, show.ignores 
               panel.grid = ggplot2::element_blank()) +
         ggplot2::scale_colour_viridis_c(option = "inferno") +
         ggplot2::facet_grid(. ~ platecol, drop = FALSE)
-    p.Tstrip <- ggplot2::ggplot(filter(toplot.n, is.outlier.temp)) +
+    p.Tstrip <- ggplot2::ggplot(dplyr::filter(toplot.n, is.outlier.temp)) +
         ggplot2::geom_segment(ggplot2::aes(duration.h, y = 0, yend = 1), colour = "black",
                               linewidth = 0.1) +
         ggplot2::geom_segment(data = dplyr::filter(toplot.line,
